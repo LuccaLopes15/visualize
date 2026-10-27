@@ -2,15 +2,17 @@ import { useState, type ReactNode } from 'react'
 import type { Idea, Project } from '@shared/types'
 import { StatusBadge } from './StatusBadge'
 import { relativeTime } from '../lib/format'
-import { IconPlus } from './Icons'
+import { IconBoard, IconPlus, IconTrash } from './Icons'
 
 interface IdeaListProps {
   ideas: Idea[]
   projectsById: Map<number, Project>
   selectedId: number | null
   onSelect: (id: number) => void
-  /** Double-click opens the idea's workspace. */
+  /** Double-click (or the row's "Abrir workspace" action) opens the idea's workspace. */
   onOpen?: (id: number) => void
+  /** Row "Excluir" action; the caller asks for confirmation. */
+  onDelete?: (id: number) => void
   empty: ReactNode
   /** Hide the project chips (e.g. inside a project view, for the current project). */
   hideProjectId?: number
@@ -22,17 +24,19 @@ export function IdeaList({
   selectedId,
   onSelect,
   onOpen,
+  onDelete,
   empty,
   hideProjectId
 }: IdeaListProps): React.JSX.Element {
   if (ideas.length === 0)
     return typeof empty === 'string' ? <div className="empty">{empty}</div> : <>{empty}</>
+  const hasActions = Boolean(onOpen || onDelete)
   return (
-    <ul className="idea-list">
+    <ul className={`idea-list${hasActions ? ' with-actions' : ''}`}>
       {ideas.map((idea) => {
         const chips = idea.projects.filter((l) => l.projectId !== hideProjectId)
         return (
-          <li key={idea.id}>
+          <li key={idea.id} className="idea-item">
             <button
               className={`idea-row${selectedId === idea.id ? ' selected' : ''}${
                 idea.status === 'arquivada' ? ' archived' : ''
@@ -65,6 +69,40 @@ export function IdeaList({
                 </span>
               </div>
             </button>
+            {hasActions && (
+              <div className="idea-row-actions">
+                {onOpen && (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="Abrir workspace"
+                    aria-label={`Abrir workspace de “${idea.title}”`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpen(idea.id)
+                    }}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <IconBoard size={15} />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger"
+                    title="Excluir"
+                    aria-label={`Excluir “${idea.title}”`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete(idea.id)
+                    }}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <IconTrash size={15} />
+                  </button>
+                )}
+              </div>
+            )}
           </li>
         )
       })}

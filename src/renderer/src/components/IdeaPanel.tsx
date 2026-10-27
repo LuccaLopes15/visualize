@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { IDEA_STATUSES, IDEA_STATUS_LABELS, type Idea, type IdeaStatus, type Project } from '@shared/types'
 import { StatusBadge } from './StatusBadge'
-import { ConfirmDialog } from './Modal'
+import { DeleteIdeaDialog } from './DeleteIdeaDialog'
 import { ProjectDialog } from './ProjectDialog'
 import { LinkMenu } from './LinkMenu'
 import { IconArchive, IconBoard, IconLink, IconRestore, IconStar, IconTrash, IconX } from './Icons'
@@ -217,16 +217,8 @@ export function IdeaPanel({
       </footer>
 
       {confirmDelete && (
-        <ConfirmDialog
-          title="Excluir ideia?"
-          message={
-            <>
-              <strong>{idea.title}</strong> será excluída permanentemente. Se quiser só tirar da frente,
-              use <em>Arquivar</em>.
-            </>
-          }
-          confirmLabel="Excluir"
-          danger
+        <DeleteIdeaDialog
+          idea={idea}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
             setConfirmDelete(false)

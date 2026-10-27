@@ -8,6 +8,7 @@ import { ProjectDialog } from './components/ProjectDialog'
 import { ConfirmDialog } from './components/Modal'
 import { SettingsView } from './components/SettingsView'
 import { LinkProjectDialog } from './components/LinkProjectDialog'
+import { DeleteIdeaDialog } from './components/DeleteIdeaDialog'
 import { Workspace } from './workspace/Workspace'
 import { flushAll } from './lib/autosave'
 import { useToast } from './components/Toasts'
@@ -46,6 +47,7 @@ export function App(): React.JSX.Element {
   const [confirmRemoveProject, setConfirmRemoveProject] = useState<Project | null>(null)
   const [workspaceId, setWorkspaceId] = useState<number | null>(null)
   const [linkPrompt, setLinkPrompt] = useState<Idea | null>(null)
+  const [confirmDeleteIdea, setConfirmDeleteIdea] = useState<Idea | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
@@ -125,6 +127,15 @@ export function App(): React.JSX.Element {
     }
   }
 
+  const removeIdea = async (idea: Idea): Promise<void> => {
+    try {
+      await api.ideas.remove(idea.id)
+      setSelectedId((cur) => (cur === idea.id ? null : cur))
+    } catch (err) {
+      toast.error(err)
+    }
+  }
+
   const removeProject = async (p: Project): Promise<void> => {
     try {
       await api.projects.remove(p.id)
@@ -142,7 +153,8 @@ export function App(): React.JSX.Element {
     projectsById,
     selectedId,
     onSelect: (id: number) => setSelectedId((cur) => (cur === id ? null : id)),
-    onOpen: openWorkspace
+    onOpen: openWorkspace,
+    onDelete: (id: number) => setConfirmDeleteIdea(ideas.find((i) => i.id === id) ?? null)
   }
 
   let title = ''
@@ -380,6 +392,18 @@ export function App(): React.JSX.Element {
           onLinked={(idea) => {
             setLinkPrompt(null)
             setWorkspaceId(idea.id)
+          }}
+        />
+      )}
+
+      {confirmDeleteIdea && (
+        <DeleteIdeaDialog
+          idea={confirmDeleteIdea}
+          onCancel={() => setConfirmDeleteIdea(null)}
+          onConfirm={() => {
+            const idea = confirmDeleteIdea
+            setConfirmDeleteIdea(null)
+            void removeIdea(idea)
           }}
         />
       )}

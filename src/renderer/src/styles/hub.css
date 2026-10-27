@@ -395,6 +395,38 @@ select {
   color: var(--muted-2);
 }
 
+/* Row quick actions (open workspace / delete): top-right, shown on hover or
+   keyboard focus. They sit outside the row <button> (no nested buttons). */
+.idea-item {
+  position: relative;
+}
+.idea-list.with-actions .idea-row-main {
+  padding-right: 60px; /* room for .idea-row-actions so the title never runs under it */
+}
+.idea-row-actions {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.idea-item:hover .idea-row-actions,
+.idea-item:focus-within .idea-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.idea-row-actions .icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.icon-btn.icon-btn-danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .chip {
   font-size: 11.5px;
   padding: 2px 8px;

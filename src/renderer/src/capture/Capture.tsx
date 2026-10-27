@@ -6,7 +6,9 @@ const WINDOW_PADDING = 12
 
 /**
  * Quick capture: title (Enter saves), optional detail (Tab / Shift+Enter
- * reveals it), Esc discards. The draft survives an accidental blur.
+ * reveals it; Shift+Tab or Backspace on an empty detail goes back to the
+ * compact title-only mode), Esc discards. The draft survives an accidental
+ * blur, and a hidden detail keeps its text (and is still saved).
  */
 export function Capture(): React.JSX.Element {
   const [title, setTitle] = useState('')
@@ -74,6 +76,28 @@ export function Capture(): React.JSX.Element {
     requestAnimationFrame(() => bodyRef.current?.focus())
   }
 
+  /** Back to the title, caret at the end (no select-all: keep what was typed). */
+  const focusTitleEnd = (): void => {
+    const el = titleRef.current
+    if (!el) return
+    el.focus()
+    const end = el.value.length
+    el.setSelectionRange(end, end)
+  }
+
+  /** Hides the detail field; its text (if any) is kept and still saved. */
+  const collapseDetail = (): void => {
+    setShowDetail(false)
+    requestAnimationFrame(focusTitleEnd)
+  }
+
+  const toggleDetail = (): void => {
+    if (showDetail) collapseDetail()
+    else revealDetail()
+  }
+
+  const hasHiddenDetail = !showDetail && body.trim() !== ''
+
   const onTitleKey = (e: KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -99,7 +123,15 @@ export function Capture(): React.JSX.Element {
       void save()
     } else if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault()
-      titleRef.current?.focus()
+      if (body.trim() === '') {
+        setBody('')
+        collapseDetail()
+      } else {
+        focusTitleEnd()
+      }
+    } else if (e.key === 'Backspace' && body === '') {
+      e.preventDefault()
+      collapseDetail()
     }
   }
 
@@ -143,21 +175,65 @@ export function Capture(): React.JSX.Element {
       <div className="capture-hints">
         {error ? (
           <span className="capture-error">{error}</span>
+        ) : showDetail ? (
+          <>
+            <span>
+              <kbd>Enter</kbd> salvar
+            </span>
+            <span>
+              <kbd>Shift+Enter</kbd> nova linha
+            </span>
+            <span>
+              <kbd>Shift+Tab</kbd> voltar
+            </span>
+            <span>
+              <kbd>Esc</kbd> descartar
+            </span>
+          </>
         ) : (
           <>
             <span>
               <kbd>Enter</kbd> salvar
             </span>
-            {!showDetail && (
-              <span>
-                <kbd>Tab</kbd> detalhe
-              </span>
-            )}
+            <span>
+              <kbd>Tab</kbd> detalhes
+            </span>
             <span>
               <kbd>Esc</kbd> descartar
             </span>
           </>
         )}
+        <button
+          type="button"
+          className={`capture-toggle${hasHiddenDetail ? ' has-text' : ''}`}
+          onMouseDown={(e) => e.preventDefault() /* keep focus in the field */}
+          onClick={toggleDetail}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              discard()
+            }
+          }}
+          aria-expanded={showDetail}
+          aria-label={
+            showDetail
+              ? 'Ocultar detalhes'
+              : hasHiddenDetail
+                ? 'Mostrar detalhes (há texto escrito, ele será salvo junto)'
+                : 'Mostrar detalhes'
+          }
+          title={hasHiddenDetail ? 'Há detalhes escritos — serão salvos junto' : undefined}
+        >
+          {showDetail ? (
+            '– detalhes'
+          ) : hasHiddenDetail ? (
+            <>
+              <span className="capture-toggle-dot" aria-hidden />+ detalhes (com texto)
+            </>
+          ) : (
+            '+ detalhes'
+          )}
+        </button>
       </div>
     </div>
   )

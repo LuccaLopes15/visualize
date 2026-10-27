@@ -86,3 +86,37 @@ body.capture-body #root {
 .capture-error {
   color: var(--danger);
 }
+
+.capture-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font: inherit;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+
+.capture-toggle:hover,
+.capture-toggle:focus-visible {
+  color: var(--text);
+}
+
+.capture-toggle:focus-visible {
+  outline: 1px solid var(--accent);
+}
+
+.capture-toggle.has-text {
+  color: var(--muted);
+}
+
+.capture-toggle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
