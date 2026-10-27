@@ -1,0 +1,88 @@
+html,
+body.capture-body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+
+body.capture-body #root {
+  padding: 12px; /* WINDOW_PADDING in Capture.tsx */
+}
+
+.capture-card {
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(124, 92, 255, 0.12);
+  padding: 12px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.capture-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.capture-spark {
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.capture-title {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 500;
+  padding: 4px 0;
+  user-select: text;
+}
+
+.capture-title::placeholder,
+.capture-body-input::placeholder {
+  color: var(--muted-2);
+}
+
+.capture-body-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  resize: none;
+  outline: none;
+  user-select: text;
+  max-height: 220px;
+}
+
+.capture-body-input:focus {
+  border-color: var(--accent);
+}
+
+.capture-hints {
+  display: flex;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 2px 2px 0 30px;
+  min-height: 18px;
+  align-items: center;
+}
+
+.capture-error {
+  color: var(--danger);
+}

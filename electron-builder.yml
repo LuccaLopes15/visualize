@@ -1,0 +1,28 @@
+appId: com.visualize.app
+productName: Visualize
+directories:
+  buildResources: build
+  output: dist
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!vitest.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!.remember/*'
+asarUnpack:
+  - resources/**
+  - node_modules/better-sqlite3/**
+# better-sqlite3 >= 13 ships N-API prebuilds that work in Electron as-is;
+# rebuilding would need Visual Studio build tools and gains nothing.
+npmRebuild: false
+win:
+  executableName: visualize
+  icon: resources/icon.png
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always

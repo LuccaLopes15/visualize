@@ -1,0 +1,58 @@
+:root {
+  color-scheme: dark;
+
+  --bg: #0d0f13;
+  --sidebar: #11141a;
+  --surface: #161a22;
+  --surface-2: #1c212b;
+  --surface-3: #232937;
+  --border: #252b37;
+  --border-strong: #323a4a;
+
+  --text: #e7e9ef;
+  --muted: #8b93a5;
+  --muted-2: #5f677a;
+
+  --accent: #8b6cff;
+  --accent-strong: #7c5cff;
+  --accent-soft: rgba(139, 108, 255, 0.14);
+  --accent-2: #38bdf8;
+  --danger: #f2616f;
+  --danger-soft: rgba(242, 97, 111, 0.12);
+  --ok: #34d399;
+  --warn: #fbbf24;
+
+  --status-solta: #94a3b8;
+  --status-em_trabalho: #38bdf8;
+  --status-planejada: #a78bfa;
+  --status-ticketada: #34d399;
+  --status-arquivada: #6b7280;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+
+  --font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Cascadia Mono', 'Cascadia Code', Consolas, monospace;
+
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+kbd {
+  font-family: var(--font);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  margin-right: 4px;
+}
