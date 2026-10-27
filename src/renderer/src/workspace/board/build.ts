@@ -195,7 +195,7 @@ export function buildFlow(flow: FlowSpec, existing: readonly ElementLike[], genI
   }
 
   const g = new graphlib.Graph({ multigraph: true })
-  g.setGraph({ rankdir: dir, nodesep: dir === 'LR' ? 60 : 70, ranksep: dir === 'LR' ? 110 : 90, edgesep: 30, marginx: 0, marginy: 0 })
+  g.setGraph({ rankdir: dir, nodesep: dir === 'LR' ? 60 : 70, ranksep: dir === 'LR' ? 90 : 80, edgesep: 30, marginx: 0, marginy: 0 })
   g.setDefaultEdgeLabel(() => ({}))
   for (const n of nodes) g.setNode(n.id, { ...sizes.get(n.shape ?? 'rectangle')! })
   const edges = flow.edges.filter((e, i) => {

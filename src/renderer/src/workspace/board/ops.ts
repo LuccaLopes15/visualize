@@ -77,7 +77,7 @@ function userBusy(api: ExcalidrawImperativeAPI): boolean {
 function reveal(api: ExcalidrawImperativeAPI, elements: El[]): void {
   if (!elements.length || userBusy(api)) return
   try {
-    api.scrollToContent(elements as any, { fitToViewport: true, viewportZoomFactor: 0.8, animate: true, maxZoom: 1 })
+    api.scrollToContent(elements as any, { fitToViewport: true, viewportZoomFactor: 0.9, animate: true, maxZoom: 1 })
   } catch {
     /* hidden tab mid-layout: not important */
   }
