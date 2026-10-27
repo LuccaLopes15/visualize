@@ -9,7 +9,11 @@ import { createMainWindow, getMainWindow, showMainWindow } from './windows/mainW
 import { requestRendererFlush } from './flush'
 import { createCaptureWindow, showCaptureWindow } from './windows/captureWindow'
 import { appState } from './state'
-import { DEFAULT_SETTINGS } from '@shared/types'
+import { DEFAULT_SETTINGS, type MacroUpdatedEvent } from '@shared/types'
+import { IpcEvents } from '@shared/ipc'
+import { VisualizeMcpServer } from './mcp/server'
+import { requestBoardOp } from './mcp/boardBridge'
+import { ChatManager } from './claude/manager'
 
 // Dev runs use a separate profile so they never touch the real database
 // (and the single-instance lock doesn't collide with an installed copy).
@@ -70,7 +74,49 @@ async function bootstrap(): Promise<void> {
     return ok
   }
 
+  // ---- Fase 3: MCP server for Claude's tools + chat sessions ----------
+  // Macro tools first ask the hub to write pending autosaves, so Claude reads
+  // (and overwrites) what the user really sees.
+  const mcp = new VisualizeMcpServer(
+    {
+      board: (ideaId, op) => requestBoardOp(getMainWindow(), ideaId, op),
+      macro: {
+        read: async (ideaId) => {
+          await requestRendererFlush(getMainWindow())
+          return repos.macroPlans.get(ideaId)
+        },
+        write: async (ideaId, markdown) => {
+          await requestRendererFlush(getMainWindow())
+          const res = repos.macroPlans.save(ideaId, markdown)
+          const win = getMainWindow()
+          const ev: MacroUpdatedEvent = { ideaId, markdown, updatedAt: res.updatedAt }
+          if (win && !win.isDestroyed()) win.webContents.send(IpcEvents.macroUpdated, ev)
+          return res
+        }
+      }
+    },
+    app.getVersion()
+  )
+  try {
+    await mcp.start()
+  } catch (err) {
+    console.error('[mcp] não foi possível iniciar o servidor', err)
+  }
+  const chat = new ChatManager({
+    repos,
+    mcp: {
+      url: () => mcp.url(),
+      issueToken: (ideaId) => mcp.issueToken(ideaId),
+      revokeToken: (token) => mcp.revokeToken(token)
+    },
+    emit: (ev) => {
+      const win = getMainWindow()
+      if (win && !win.isDestroyed()) win.webContents.send(IpcEvents.chat, ev)
+    }
+  })
+
   registerIpc({
+    chat,
     repos,
     dbPath,
     hotkeyStatus: () => hotkeys.status(),
@@ -116,6 +162,8 @@ async function bootstrap(): Promise<void> {
   })
 
   app.on('will-quit', () => {
+    chat.disposeAll()
+    void mcp.close()
     hotkeys.unregister()
     repos.db.close()
   })

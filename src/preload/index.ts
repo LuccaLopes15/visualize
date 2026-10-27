@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { IpcEvents, type IpcArgs, type IpcChannel, type IpcResult } from '@shared/ipc'
 import type { VisualizeApi } from '@shared/api'
-import type { DataChangedEvent } from '@shared/types'
+import type { DataChangedEvent, MacroUpdatedEvent } from '@shared/types'
+import type { BoardRequest } from '@shared/board'
+import type { ChatEvent } from '@shared/chat'
 
 /** Invokes a typed channel and strips Electron's "Error invoking remote method" prefix. */
 async function invoke<C extends IpcChannel>(
@@ -63,7 +65,25 @@ const api: VisualizeApi = {
   },
   macro: {
     get: (...a) => invoke('macro:get', ...a),
-    save: (...a) => invoke('macro:save', ...a)
+    save: (...a) => invoke('macro:save', ...a),
+    onUpdated: (cb) => subscribe<MacroUpdatedEvent>(IpcEvents.macroUpdated, cb)
+  },
+  chat: {
+    open: (...a) => invoke('chat:open', ...a),
+    send: (...a) => invoke('chat:send', ...a),
+    stop: (...a) => invoke('chat:stop', ...a),
+    reset: (...a) => invoke('chat:reset', ...a),
+    close: (...a) => invoke('chat:close', ...a),
+    boardReply: (...a) => invoke('chat:boardReply', ...a),
+    onEvent: (cb) => subscribe<ChatEvent>(IpcEvents.chat, cb),
+    onBoardRequest: (cb) => subscribe<BoardRequest>(IpcEvents.boardRequest, cb)
+  },
+  claude: {
+    status: (...a) => invoke('claude:status', ...a),
+    getSettings: () => invoke('claude:getSettings'),
+    setPath: (...a) => invoke('claude:setPath', ...a),
+    setModel: (...a) => invoke('claude:setModel', ...a),
+    pickPath: () => invoke('claude:pickPath')
   },
   app: {
     info: () => invoke('app:info'),

@@ -1,7 +1,9 @@
 // Shape of `window.api` exposed by the preload. Derived from IpcContract so the
 // renderer, preload and main can't drift apart.
 import type { IpcChannel, IpcContract } from './ipc'
-import type { DataChangedEvent } from './types'
+import type { DataChangedEvent, MacroUpdatedEvent } from './types'
+import type { BoardRequest } from './board'
+import type { ChatEvent } from './chat'
 
 type Invoke<C extends IpcChannel> = IpcContract[C] extends (...args: infer A) => infer R
   ? (...args: A) => Promise<Awaited<R>>
@@ -46,6 +48,26 @@ export interface VisualizeApi {
   macro: {
     get: Invoke<'macro:get'>
     save: Invoke<'macro:save'>
+    /** Claude changed the plano macro of some idea. */
+    onUpdated: (cb: (e: MacroUpdatedEvent) => void) => Unsubscribe
+  }
+  chat: {
+    open: Invoke<'chat:open'>
+    send: Invoke<'chat:send'>
+    stop: Invoke<'chat:stop'>
+    reset: Invoke<'chat:reset'>
+    close: Invoke<'chat:close'>
+    boardReply: Invoke<'chat:boardReply'>
+    onEvent: (cb: (e: ChatEvent) => void) => Unsubscribe
+    /** Claude's board tools: apply the op on the live board and reply with `boardReply`. */
+    onBoardRequest: (cb: (r: BoardRequest) => void) => Unsubscribe
+  }
+  claude: {
+    status: Invoke<'claude:status'>
+    getSettings: Invoke<'claude:getSettings'>
+    setPath: Invoke<'claude:setPath'>
+    setModel: Invoke<'claude:setModel'>
+    pickPath: Invoke<'claude:pickPath'>
   }
   app: {
     info: Invoke<'app:info'>

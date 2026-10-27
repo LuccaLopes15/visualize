@@ -2,7 +2,7 @@
 // domain (`ideas:*`, `projects:*`, `settings:*`, `capture:*`, `app:*`).
 // Main registers handlers with `handle()` (src/main/ipc/handle.ts) and preload
 // exposes them with `invoke()`, both typed from this single map.
-// Later phases add their namespaces here (`boards:*`, `plan:*`, `chat:*`, ...).
+// Later phases add their namespaces here (`plan:*`, `devops:*`, ...).
 
 import type {
   AppInfo,
@@ -19,6 +19,8 @@ import type {
   ProjectPatch,
   SaveResult
 } from './types'
+import type { BoardOpResult } from './board'
+import type { ChatState, ClaudeSettings, ClaudeStatus } from './chat'
 
 export interface IpcContract {
   'ideas:list': () => Idea[]
@@ -52,6 +54,27 @@ export interface IpcContract {
   'macro:get': (ideaId: number) => MacroPlan
   'macro:save': (ideaId: number, markdown: string) => SaveResult
 
+  // ---- Fase 3: chat com o Claude Code CLI ----
+  /** History + whether a turn is running + CLI status (does not spawn anything). */
+  'chat:open': (ideaId: number) => ChatState
+  /** Sends a user message (spawns/resumes the CLI process on demand). */
+  'chat:send': (ideaId: number, text: string) => void
+  /** Interrupts the running turn. */
+  'chat:stop': (ideaId: number) => void
+  /** "Nova conversa": kills the process, forgets the CLI session and clears history. */
+  'chat:reset': (ideaId: number) => void
+  /** Leaving the workspace: ends the CLI process (history and session id are kept). */
+  'chat:close': (ideaId: number) => void
+  /** Renderer's answer to an `events:boardRequest`. */
+  'chat:boardReply': (requestId: string, result: BoardOpResult) => void
+
+  'claude:status': (refresh?: boolean) => ClaudeStatus
+  'claude:getSettings': () => ClaudeSettings
+  /** Saves the path override ('' = auto-detect) and returns the new status. */
+  'claude:setPath': (path: string) => ClaudeStatus
+  'claude:setModel': (model: string) => ClaudeSettings
+  'claude:pickPath': () => string | null
+
   'app:info': () => AppInfo
   'app:openHub': () => void
   /** Renderer acknowledges an `events:flushRequest` (pending autosaves written). */
@@ -70,5 +93,11 @@ export const IpcEvents = {
    * Main asks the hub to write pending autosaves now (window hidden, app
    * quitting). Payload: a token the renderer echoes back via `app:flushDone`.
    */
-  flushRequest: 'events:flushRequest'
+  flushRequest: 'events:flushRequest',
+  /** Chat streaming events (payload: ChatEvent). */
+  chat: 'events:chat',
+  /** Claude's board tool wants the renderer to apply an op (payload: BoardRequest). */
+  boardRequest: 'events:boardRequest',
+  /** Plano macro rewritten by Claude (payload: MacroUpdatedEvent). */
+  macroUpdated: 'events:macroUpdated'
 } as const

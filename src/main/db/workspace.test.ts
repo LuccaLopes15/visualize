@@ -30,7 +30,7 @@ describe('migration v2', () => {
       .all()
       .map((r) => (r as { name: string }).name)
     expect(tables).toEqual(expect.arrayContaining(['boards', 'board_files', 'macro_plans']))
-    expect(getSchemaVersion(repos.db)).toBe(2)
+    expect(getSchemaVersion(repos.db)).toBeGreaterThanOrEqual(2)
   })
 
   it('upgrades a v1 database keeping existing data', () => {
@@ -41,7 +41,7 @@ describe('migration v2', () => {
       migrations.filter((m) => m.version === 1)
     )
     db.prepare("INSERT INTO ideas (title, created_at, updated_at) VALUES ('antiga', 1, 1)").run()
-    expect(runMigrations(db)).toEqual([2])
+    expect(runMigrations(db)).toEqual([2, 3])
     expect(db.prepare('SELECT title FROM ideas').get()).toEqual({ title: 'antiga' })
     expect(db.prepare('SELECT COUNT(*) c FROM boards').get()).toEqual({ c: 0 })
   })

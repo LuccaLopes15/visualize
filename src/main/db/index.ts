@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
 import { openDatabase } from './connection'
 import { BoardsRepository } from './repositories/boards'
+import { ChatRepository } from './repositories/chat'
 import { IdeasRepository } from './repositories/ideas'
 import { MacroPlansRepository } from './repositories/macroPlans'
 import { ProjectsRepository } from './repositories/projects'
@@ -13,6 +14,7 @@ export interface Repositories {
   settings: SettingsRepository
   boards: BoardsRepository
   macroPlans: MacroPlansRepository
+  chat: ChatRepository
 }
 
 export function createRepositories(filename: string, now: () => number = Date.now): Repositories {
@@ -23,7 +25,8 @@ export function createRepositories(filename: string, now: () => number = Date.no
     projects: new ProjectsRepository(db, now),
     settings: new SettingsRepository(db),
     boards: new BoardsRepository(db, now),
-    macroPlans: new MacroPlansRepository(db, now)
+    macroPlans: new MacroPlansRepository(db, now),
+    chat: new ChatRepository(db, now)
   }
 }
 

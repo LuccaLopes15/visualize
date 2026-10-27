@@ -12,6 +12,10 @@ import { handle, toId } from './handle'
 import { hideCaptureWindow, resizeCaptureWindow } from '../windows/captureWindow'
 import { showMainWindow } from '../windows/mainWindow'
 import { resolveFlush } from '../flush'
+import type { ChatManager } from '../claude/manager'
+import { publicStatus } from '../claude/manager'
+import { ChatError } from '../claude/session'
+import { resolveBoardReply } from '../mcp/boardBridge'
 
 export interface IpcDeps {
   repos: Repositories
@@ -19,6 +23,7 @@ export interface IpcDeps {
   setHotkey: (accelerator: string) => { hotkey: string; registered: boolean }
   hotkeyStatus: () => { hotkey: string; registered: boolean }
   setAutostart: (enabled: boolean) => void
+  chat: ChatManager
 }
 
 /** Registers all IPC handlers. One block per namespace. */
@@ -48,6 +53,7 @@ export function registerIpc(deps: IpcDeps): void {
     return idea
   })
   handle('ideas:delete', (id) => {
+    deps.chat.close(toId(id))
     repos.ideas.delete(toId(id))
     notifyChanged('ideas', 'projects')
   })
@@ -133,6 +139,44 @@ export function registerIpc(deps: IpcDeps): void {
   )
   handle('macro:get', (ideaId) => repos.macroPlans.get(toId(ideaId, 'ideia')))
   handle('macro:save', (ideaId, markdown) => repos.macroPlans.save(toId(ideaId, 'ideia'), markdown))
+
+  // ---- chat:* / claude:* (Fase 3) ----------------------------------------
+  const { chat } = deps
+  handle('chat:open', (ideaId) => chat.open(toId(ideaId, 'ideia')))
+  handle('chat:send', async (ideaId, text) => {
+    try {
+      await chat.send(toId(ideaId, 'ideia'), String(text ?? ''))
+    } catch (err) {
+      // ChatError details already reached the panel as an `error` event.
+      if (err instanceof ChatError) throw new Error(err.detail.message)
+      throw err
+    }
+  })
+  handle('chat:stop', (ideaId) => chat.stop(toId(ideaId, 'ideia')))
+  handle('chat:reset', (ideaId) => chat.reset(toId(ideaId, 'ideia')))
+  handle('chat:close', (ideaId) => chat.close(toId(ideaId, 'ideia')))
+  handle('chat:boardReply', (requestId, result) => resolveBoardReply(requestId, result))
+
+  handle('claude:status', async (refresh) => publicStatus(await chat.detector.status(refresh === true)))
+  handle('claude:getSettings', () => chat.settings())
+  handle('claude:setPath', (path) => chat.setPath(typeof path === 'string' ? path : ''))
+  handle('claude:setModel', (model) => chat.setModel(typeof model === 'string' ? model : ''))
+  handle('claude:pickPath', async () => {
+    const parent = BrowserWindow.getFocusedWindow()
+    const options: Electron.OpenDialogOptions = {
+      title: 'Escolher o executável do Claude Code',
+      properties: ['openFile'],
+      filters:
+        process.platform === 'win32'
+          ? [
+              { name: 'Claude Code', extensions: ['exe', 'cmd', 'js'] },
+              { name: 'Todos os arquivos', extensions: ['*'] }
+            ]
+          : []
+    }
+    const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
 
   // ---- app:* ------------------------------------------------------------
   handle('app:info', () => ({

@@ -79,6 +79,29 @@ export const migrations: Migration[] = [
         updated_at INTEGER NOT NULL
       );
     `
+  },
+  {
+    version: 3,
+    name: 'fase3_chat',
+    up: `
+      -- Claude Code CLI session of an idea's chat (resumed with --resume).
+      -- context_sig: hash of the idea context (title/body/projects) Claude last saw.
+      CREATE TABLE chat_sessions (
+        idea_id        INTEGER PRIMARY KEY REFERENCES ideas (id) ON DELETE CASCADE,
+        cli_session_id TEXT,
+        context_sig    TEXT    NOT NULL DEFAULT '',
+        updated_at     INTEGER NOT NULL
+      );
+
+      CREATE TABLE chat_messages (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        idea_id      INTEGER NOT NULL REFERENCES ideas (id) ON DELETE CASCADE,
+        role         TEXT    NOT NULL CHECK (role IN ('user', 'assistant')),
+        content_json TEXT    NOT NULL,
+        created_at   INTEGER NOT NULL
+      );
+      CREATE INDEX idx_chat_messages_idea ON chat_messages (idea_id, id);
+    `
   }
 ]
 

@@ -134,3 +134,10 @@ export interface MacroPlan {
 export interface SaveResult {
   updatedAt: number
 }
+
+/** Pushed when Claude rewrites/appends to the plano macro of an idea. */
+export interface MacroUpdatedEvent {
+  ideaId: number
+  markdown: string
+  updatedAt: number
+}
