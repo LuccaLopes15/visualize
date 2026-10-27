@@ -12,7 +12,10 @@ import { DEFAULT_SETTINGS } from '@shared/types'
 
 // Dev runs use a separate profile so they never touch the real database
 // (and the single-instance lock doesn't collide with an installed copy).
-if (!app.isPackaged) {
+// VISUALIZE_USER_DATA overrides it (used for automated/manual test runs).
+if (process.env['VISUALIZE_USER_DATA']) {
+  app.setPath('userData', process.env['VISUALIZE_USER_DATA'])
+} else if (!app.isPackaged) {
   app.setPath('userData', join(app.getPath('appData'), 'Visualize (dev)'))
 }
 
@@ -56,6 +59,7 @@ async function bootstrap(): Promise<void> {
 
   const registerHotkey = (accelerator: string): boolean => {
     const ok = hotkeys.register(accelerator)
+    console.log(`[hotkey] ${accelerator} registered=${ok}`)
     if (!ok) {
       trayNotify(
         'Atalho não registrado',

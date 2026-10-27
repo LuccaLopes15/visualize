@@ -47,6 +47,13 @@ function keyFromCode(code: string): string | null {
   return map[code] ?? null
 }
 
+/** Fallback when `code` is missing (some synthetic/remote input): use the printed key. */
+function keyFromKey(key: string): string | null {
+  if (key === ' ') return 'Space'
+  if (/^[a-z0-9]$/i.test(key)) return key.toUpperCase()
+  return null
+}
+
 /**
  * Returns an accelerator like "Control+Alt+Space", or null when the event is
  * only modifiers / has no modifier (a global shortcut needs Ctrl/Alt/Win,
@@ -54,7 +61,7 @@ function keyFromCode(code: string): string | null {
  */
 export function eventToAccelerator(e: KeyLike): string | null {
   if (MODIFIER_KEYS.has(e.key)) return null
-  const key = keyFromCode(e.code)
+  const key = keyFromCode(e.code) ?? keyFromKey(e.key)
   if (!key) return null
   const mods: string[] = []
   if (e.ctrlKey) mods.push('Control')

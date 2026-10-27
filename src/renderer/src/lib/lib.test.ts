@@ -55,6 +55,12 @@ describe('accelerator', () => {
     expect(eventToAccelerator(ev({ key: 'A', code: 'KeyA', shiftKey: true }))).toBeNull()
   })
 
+  it('falls back to the printed key when code is missing', () => {
+    expect(eventToAccelerator(ev({ key: 'j', code: '', ctrlKey: true, altKey: true }))).toBe(
+      'Control+Alt+J'
+    )
+  })
+
   it('allows bare function keys', () => {
     expect(eventToAccelerator(ev({ key: 'F9', code: 'F9' }))).toBe('F9')
   })

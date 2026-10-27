@@ -16,6 +16,9 @@ export function createMainWindow(showOnReady: boolean): BrowserWindow {
     icon: appIcon,
     backgroundColor: '#0e1014',
     autoHideMenuBar: true,
+    // Dark custom title bar; Windows still draws the min/max/close buttons.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#0d0f13', symbolColor: '#8b93a5', height: 40 },
     webPreferences: securePreferences
   })
   mainWindow.setMenu(null)

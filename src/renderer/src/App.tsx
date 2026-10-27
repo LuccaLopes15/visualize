@@ -74,6 +74,7 @@ export function App(): React.JSX.Element {
   const go = (v: View): void => {
     setView(v)
     setQuery('')
+    if (v.kind === 'settings') setSelectedId(null)
   }
 
   const addIdea = async (title: string, projectId?: number): Promise<void> => {
@@ -136,7 +137,7 @@ export function App(): React.JSX.Element {
           <IdeaList
             {...listProps}
             ideas={loose}
-            empty={<EmptyLoose hotkey={settings?.hotkey} />}
+            empty={<EmptyLoose hotkey={info?.hotkey.registered ? settings?.hotkey : undefined} />}
           />
         </section>
         <section className="section">
@@ -262,12 +263,21 @@ export function App(): React.JSX.Element {
         </div>
 
         <div className="sidebar-foot">
-          {settings && (
+          {settings && info && (info.hotkey.registered ? (
             <div className="hotkey-hint" title="Atalho global para capturar uma ideia">
               <kbd>{formatAccelerator(settings.hotkey)}</kbd>
               <span>nova ideia</span>
             </div>
-          )}
+          ) : (
+            <button
+              className="hotkey-hint warn"
+              title="O atalho está em uso por outro aplicativo"
+              onClick={() => go({ kind: 'settings' })}
+            >
+              <kbd>{formatAccelerator(settings.hotkey)}</kbd>
+              <span>em uso · trocar</span>
+            </button>
+          ))}
           <NavItem
             icon={<IconSettings />}
             label="Configurações"

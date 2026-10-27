@@ -17,3 +17,29 @@ export function ensurePrimary(db: Database.Database, ideaId: number): void {
      )`
   ).run(ideaId, ideaId)
 }
+
+/**
+ * "Solta" means "no linked project". Keeps status in sync with links:
+ * solta + first link -> em_trabalho; em_trabalho + no links -> solta.
+ * Later statuses (planejada, ticketada, arquivada) are never touched.
+ */
+export function syncLooseStatus(db: Database.Database, ideaId: number, now: number): void {
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM idea_projects WHERE idea_id = ?').get(ideaId) as {
+    n: number
+  }
+  if (n > 0) {
+    db.prepare(
+      "UPDATE ideas SET status = 'em_trabalho', updated_at = ? WHERE id = ? AND status = 'solta'"
+    ).run(now, ideaId)
+  } else {
+    db.prepare(
+      "UPDATE ideas SET status = 'solta', updated_at = ? WHERE id = ? AND status = 'em_trabalho'"
+    ).run(now, ideaId)
+  }
+}
+
+/** Ensures primary + status invariants after links changed. */
+export function afterLinksChanged(db: Database.Database, ideaId: number, now: number): void {
+  ensurePrimary(db, ideaId)
+  syncLooseStatus(db, ideaId, now)
+}

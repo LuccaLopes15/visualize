@@ -22,7 +22,8 @@ export function IdeaList({
   empty,
   hideProjectId
 }: IdeaListProps): React.JSX.Element {
-  if (ideas.length === 0) return <div className="empty">{empty}</div>
+  if (ideas.length === 0)
+    return typeof empty === 'string' ? <div className="empty">{empty}</div> : <>{empty}</>
   return (
     <ul className="idea-list">
       {ideas.map((idea) => {

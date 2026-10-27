@@ -67,19 +67,35 @@ export function showCaptureWindow(): void {
     return
   }
   positionOnActiveDisplay(win)
+  win.setAlwaysOnTop(true, 'screen-saver')
   win.show()
   win.focus()
   win.webContents.focus()
   win.webContents.send(IpcEvents.captureShown)
 }
 
+let hiding = false
+
 /**
- * Hides the capture window. On Windows, hiding the focused window hands
- * activation back to the previous foreground window (the app the user was in).
+ * Hides the capture window and gives focus back to the app the user was in.
+ * On Windows a plain hide() leaves no window active, so we first drop the
+ * always-on-top flag (the window falls to the top of the normal z-order band)
+ * and blur() it: Chromium then activates the next visible window in z-order,
+ * which is the previously focused app.
  */
 export function hideCaptureWindow(): void {
-  if (!captureWindow || captureWindow.isDestroyed() || !captureWindow.isVisible()) return
-  captureWindow.hide()
+  const win = captureWindow
+  if (!win || win.isDestroyed() || !win.isVisible() || hiding) return
+  hiding = true
+  try {
+    if (process.platform === 'win32' && win.isFocused()) {
+      win.setAlwaysOnTop(false)
+      win.blur()
+    }
+    win.hide()
+  } finally {
+    hiding = false
+  }
 }
 
 export function resizeCaptureWindow(height: number): void {

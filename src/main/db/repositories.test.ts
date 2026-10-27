@@ -153,6 +153,32 @@ describe('IdeasRepository', () => {
       expect(repos.ideas.listByProject(p2.id).map((i) => i.title)).toEqual(['B', 'A'])
     })
 
+    it('"solta" means unlinked: first link -> em_trabalho, last unlink -> solta', () => {
+      const p1 = repos.projects.create({ name: 'P1', folderPath: 'C:\\p1' })
+      const idea = repos.ideas.create({ title: 'A' })
+      expect(repos.ideas.linkProject(idea.id, p1.id).status).toBe('em_trabalho')
+      expect(repos.ideas.unlinkProject(idea.id, p1.id).status).toBe('solta')
+    })
+
+    it('status sync never touches later statuses', () => {
+      const p1 = repos.projects.create({ name: 'P1', folderPath: 'C:\\p1' })
+      const idea = repos.ideas.create({ title: 'A' })
+      repos.ideas.update(idea.id, { status: 'planejada' })
+      repos.ideas.linkProject(idea.id, p1.id)
+      expect(repos.ideas.unlinkProject(idea.id, p1.id).status).toBe('planejada')
+    })
+
+    it('unarchive restores solta or em_trabalho depending on links', () => {
+      const p1 = repos.projects.create({ name: 'P1', folderPath: 'C:\\p1' })
+      const a = repos.ideas.create({ title: 'A' })
+      const b = repos.ideas.create({ title: 'B' })
+      repos.ideas.linkProject(b.id, p1.id)
+      repos.ideas.archive(a.id)
+      repos.ideas.archive(b.id)
+      expect(repos.ideas.unarchive(a.id).status).toBe('solta')
+      expect(repos.ideas.unarchive(b.id).status).toBe('em_trabalho')
+    })
+
     it('deleting an idea removes its links', () => {
       const p1 = repos.projects.create({ name: 'P1', folderPath: 'C:\\p1' })
       const idea = repos.ideas.create({ title: 'A' })
@@ -200,6 +226,8 @@ describe('ProjectsRepository', () => {
     expect(repos.ideas.list()).toHaveLength(2)
     expect(repos.ideas.get(a.id).projects).toEqual([{ projectId: p2.id, isPrimary: true }])
     expect(repos.ideas.get(b.id).projects).toEqual([])
+    expect(repos.ideas.get(b.id).status).toBe('solta')
+    expect(repos.ideas.get(a.id).status).toBe('em_trabalho')
     expect(() => repos.projects.get(p1.id)).toThrow(AppError)
   })
 })

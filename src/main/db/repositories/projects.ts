@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { NewProjectInput, Project, ProjectPatch } from '@shared/types'
 import { invalid, notFound } from '../errors'
-import { ensurePrimary } from './ideaLinks'
+import { afterLinksChanged } from './ideaLinks'
 
 interface ProjectRow {
   id: number
@@ -70,16 +70,17 @@ export class ProjectsRepository {
 
   /**
    * Removes the project. Ideas are kept: only their links to this project go
-   * away. Ideas that had it as primary get another linked project promoted.
+   * away. Ideas that had it as primary get another linked project promoted;
+   * ideas left without any project go back to "solta".
    */
   delete(id: number): void {
     this.get(id)
     this.db.transaction(() => {
       const affected = this.db
-        .prepare('SELECT idea_id FROM idea_projects WHERE project_id = ? AND is_primary = 1')
+        .prepare('SELECT idea_id FROM idea_projects WHERE project_id = ?')
         .all(id) as { idea_id: number }[]
       this.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
-      for (const a of affected) ensurePrimary(this.db, a.idea_id)
+      for (const a of affected) afterLinksChanged(this.db, a.idea_id, this.now())
     })()
   }
 }

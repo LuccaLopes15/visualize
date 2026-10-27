@@ -8,7 +8,7 @@ import {
   type NewIdeaInput
 } from '@shared/types'
 import { invalid, notFound } from '../errors'
-import { ensurePrimary } from './ideaLinks'
+import { afterLinksChanged } from './ideaLinks'
 
 interface IdeaRow {
   id: number
@@ -103,9 +103,10 @@ export class IdeasRepository {
     return this.update(id, { status: 'arquivada' })
   }
 
-  /** Restores an archived idea to "solta". */
+  /** Restores an archived idea: "solta" if it has no project, else "em_trabalho". */
   unarchive(id: number): Idea {
-    return this.update(id, { status: 'solta' })
+    const idea = this.get(id)
+    return this.update(id, { status: idea.projects.length > 0 ? 'em_trabalho' : 'solta' })
   }
 
   delete(id: number): void {
@@ -127,7 +128,7 @@ export class IdeasRepository {
         )
         .run(ideaId, projectId, this.now())
       if (makePrimary) this.setPrimaryTx(ideaId, projectId)
-      ensurePrimary(this.db, ideaId)
+      afterLinksChanged(this.db, ideaId, this.now())
       this.touch(ideaId)
     })()
     return this.get(ideaId)
@@ -139,7 +140,7 @@ export class IdeasRepository {
       this.db
         .prepare('DELETE FROM idea_projects WHERE idea_id = ? AND project_id = ?')
         .run(ideaId, projectId)
-      ensurePrimary(this.db, ideaId)
+      afterLinksChanged(this.db, ideaId, this.now())
       this.touch(ideaId)
     })()
     return this.get(ideaId)
