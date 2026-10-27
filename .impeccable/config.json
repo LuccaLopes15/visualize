@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/renderer/src/styles/workspace.css"
+        ],
+        "createdAt": "2026-10-27T16:47:27.817Z",
+        "reason": "agent triage: markdown blockquote left rule is conventional prose styling, not a card accent"
+      }
+    ]
+  }
+}
