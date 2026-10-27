@@ -9,6 +9,8 @@ interface IdeaListProps {
   projectsById: Map<number, Project>
   selectedId: number | null
   onSelect: (id: number) => void
+  /** Double-click opens the idea's workspace. */
+  onOpen?: (id: number) => void
   empty: ReactNode
   /** Hide the project chips (e.g. inside a project view, for the current project). */
   hideProjectId?: number
@@ -19,6 +21,7 @@ export function IdeaList({
   projectsById,
   selectedId,
   onSelect,
+  onOpen,
   empty,
   hideProjectId
 }: IdeaListProps): React.JSX.Element {
@@ -35,6 +38,8 @@ export function IdeaList({
                 idea.status === 'arquivada' ? ' archived' : ''
               }`}
               onClick={() => onSelect(idea.id)}
+              onDoubleClick={onOpen ? () => onOpen(idea.id) : undefined}
+              title={onOpen ? 'Duplo clique abre o workspace' : undefined}
             >
               <div className="idea-row-main">
                 <span className="idea-row-title">{idea.title}</span>

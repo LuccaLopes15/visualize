@@ -1,0 +1,599 @@
+/* ---------- Hub additions ---------- */
+
+.panel-open {
+  width: 100%;
+  justify-content: center;
+  height: 34px;
+  margin: 6px 0 10px;
+}
+
+.link-prompt-text {
+  margin: 0 0 14px;
+  white-space: normal;
+}
+.link-prompt-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 4px;
+  background: var(--bg);
+}
+.link-prompt-list .menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- Workspace layout ---------- */
+
+.ws {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  background: var(--bg);
+}
+
+.ws-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 150px 10px 14px; /* right: native window buttons */
+  -webkit-app-region: drag;
+}
+.ws-header button,
+.ws-header input,
+.ws-chips,
+.ws-folder {
+  -webkit-app-region: no-drag;
+}
+.ws-back {
+  margin-top: 2px;
+  height: 30px;
+}
+.ws-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.ws-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ws-title {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 2px 8px;
+  margin-left: -9px;
+  min-width: 120px;
+  flex: 0 1 auto;
+  width: min(100%, 640px);
+  outline: none;
+  text-overflow: ellipsis;
+}
+.ws-title:hover {
+  border-color: var(--border);
+}
+.ws-title:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.ws-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.ws-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-2);
+  font-size: 11.5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-folder svg {
+  flex: none;
+}
+
+/* Linked project chips */
+.ws-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ws-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 2px;
+}
+.ws-chip.primary {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.ws-chip-name {
+  padding: 0 2px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-chip-star,
+.ws-chip-x {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted-2);
+  padding: 0;
+}
+.ws-chip-star:hover:not(:disabled) {
+  color: var(--warn);
+  background: var(--surface-3);
+}
+.ws-chip.primary .ws-chip-star {
+  color: var(--warn);
+  cursor: default;
+}
+.ws-chip-x {
+  opacity: 0;
+}
+.ws-chip:hover .ws-chip-x:not(:disabled) {
+  opacity: 1;
+}
+.ws-chip-x:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.ws-chip-x:disabled {
+  display: none;
+}
+.ws-chip-add {
+  position: relative;
+}
+.ws-chip-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ws-chip-add-btn:hover {
+  color: var(--text);
+  border-color: var(--muted-2);
+}
+.ws-link-menu {
+  right: auto;
+  width: 300px;
+}
+
+/* Tabs bar */
+.ws-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  height: 40px;
+}
+.ws-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  position: relative;
+}
+.ws-tab:hover:not(:disabled) {
+  color: var(--text);
+}
+.ws-tab.active {
+  color: var(--text);
+}
+.ws-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.ws-tab:disabled {
+  color: var(--muted-2);
+  cursor: default;
+}
+.ws-soon {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted-2);
+}
+.ws-tabs-spacer {
+  flex: 1;
+}
+.ws-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-2);
+  margin-right: 8px;
+  border: none;
+  background: none;
+  padding: 0;
+}
+.ws-save.busy {
+  color: var(--muted);
+}
+.ws-save-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  animation: ws-pulse 1s ease-in-out infinite;
+}
+@keyframes ws-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+.ws-save.error {
+  color: var(--danger);
+  cursor: pointer;
+}
+.ws-save.error:hover {
+  text-decoration: underline;
+}
+.ws-chat-toggle.on {
+  color: var(--accent);
+}
+
+/* Body: tab panes + chat slot */
+.ws-body {
+  display: flex;
+  min-height: 0;
+}
+.ws-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+/* Panes stay mounted (Excalidraw keeps undo history); the hidden one keeps its
+   size so Excalidraw never measures a 0x0 container. It is also `inert` and
+   sits under the active pane: Excalidraw forces `visibility: visible` on some
+   of its own controls, so visibility alone would let them bleed through. */
+.ws-pane {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.ws-pane.active {
+  z-index: 1;
+  background: var(--bg);
+  visibility: visible;
+  pointer-events: auto;
+}
+.ws-placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Chat slot (Fase 3) */
+.ws-chat {
+  width: 360px;
+  flex: none;
+  border-left: 1px solid var(--border);
+  background: var(--sidebar);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ws-chat.collapsed {
+  width: 40px;
+}
+.ws-chat-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.ws-chat-rail span {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.04em;
+}
+.ws-chat-rail:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+.ws-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 550;
+  font-size: 13px;
+}
+.ws-chat-head span {
+  flex: 1;
+}
+.ws-chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+  padding: 24px;
+  color: var(--muted);
+}
+.ws-chat-empty p {
+  margin: 4px 0 0;
+}
+
+/* ---------- Board (Excalidraw) ---------- */
+
+.board {
+  position: absolute;
+  inset: 0;
+}
+/* Blend Excalidraw's dark UI with the app palette. */
+.board .excalidraw.theme--dark {
+  --island-bg-color: var(--surface);
+  --default-bg-color: var(--bg);
+  --popup-bg-color: var(--surface-2);
+  --sidebar-bg-color: var(--sidebar);
+  --sidebar-border-color: var(--border);
+  --dialog-border-color: var(--border-strong);
+  --color-primary: var(--accent);
+  --color-primary-darker: var(--accent-strong);
+  --color-primary-darkest: var(--accent-strong);
+  --ui-font: var(--font);
+}
+
+/* ---------- Plano macro ---------- */
+
+.macro {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.macro-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.macro-hint {
+  font-size: 11.5px;
+  color: var(--muted-2);
+  flex: 1;
+}
+.macro-template {
+  height: 28px;
+}
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.segmented button {
+  height: 26px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.segmented button:hover {
+  color: var(--text);
+}
+.segmented button.on {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.macro-panes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.macro-split .macro-panes {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.macro-editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: var(--bg);
+  padding: 22px 26px 60px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+.macro-editor::placeholder {
+  color: var(--muted-2);
+}
+.macro-split .macro-editor {
+  border-right: 1px solid var(--border);
+}
+.macro-edit .macro-editor,
+.macro-preview .macro-preview-wrap {
+  max-width: 920px;
+  margin: 0 auto;
+  width: 100%;
+}
+.macro-preview-wrap {
+  overflow-y: auto;
+  padding: 22px 30px 60px;
+  min-height: 0;
+}
+.macro-empty {
+  color: var(--muted-2);
+  font-size: 13px;
+  padding-top: 4px;
+}
+
+/* Rendered markdown */
+.markdown {
+  line-height: 1.65;
+  font-size: 14px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.4em 0 0.5em;
+}
+.markdown h1 {
+  font-size: 1.6em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+.markdown h2 {
+  font-size: 1.3em;
+}
+.markdown h3 {
+  font-size: 1.1em;
+}
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre,
+.markdown table {
+  margin: 0 0 0.9em;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 1.5em;
+}
+.markdown li + li {
+  margin-top: 0.2em;
+}
+.markdown li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -1.3em;
+}
+.markdown input[type='checkbox'] {
+  margin: 0 6px 0 0;
+  accent-color: var(--accent);
+  vertical-align: -1px;
+}
+.markdown a {
+  color: var(--accent-2);
+  text-decoration: none;
+}
+.markdown a:hover {
+  text-decoration: underline;
+}
+.markdown code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.markdown pre {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+.markdown blockquote {
+  padding: 2px 14px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--muted);
+}
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+.markdown table {
+  border-collapse: collapse;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+}
+.markdown th {
+  background: var(--surface);
+}
+.markdown img {
+  max-width: 100%;
+}

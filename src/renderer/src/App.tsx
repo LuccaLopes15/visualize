@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Project } from '@shared/types'
+import type { Idea, Project } from '@shared/types'
 import { useAppData } from './hooks/useAppData'
 import { IdeaList, QuickAdd } from './components/IdeaList'
 import { IdeaPanel } from './components/IdeaPanel'
@@ -7,6 +7,9 @@ import { ProjectGrid } from './components/ProjectGrid'
 import { ProjectDialog } from './components/ProjectDialog'
 import { ConfirmDialog } from './components/Modal'
 import { SettingsView } from './components/SettingsView'
+import { LinkProjectDialog } from './components/LinkProjectDialog'
+import { Workspace } from './workspace/Workspace'
+import { flushAll } from './lib/autosave'
 import { useToast } from './components/Toasts'
 import {
   IconArchive,
@@ -41,6 +44,8 @@ export function App(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [projectDialog, setProjectDialog] = useState<{ project?: Project } | null>(null)
   const [confirmRemoveProject, setConfirmRemoveProject] = useState<Project | null>(null)
+  const [workspaceId, setWorkspaceId] = useState<number | null>(null)
+  const [linkPrompt, setLinkPrompt] = useState<Idea | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
@@ -49,6 +54,38 @@ export function App(): React.JSX.Element {
   const archived = useMemo(() => ideas.filter((i) => i.status === 'arquivada'), [ideas])
   const selectedIdea = ideas.find((i) => i.id === selectedId) ?? null
   const currentProject = view.kind === 'project' ? projectsById.get(view.id) : undefined
+  const workspaceIdea = workspaceId != null ? ideas.find((i) => i.id === workspaceId) : undefined
+
+  // Leave the workspace if its idea was deleted.
+  useEffect(() => {
+    if (workspaceId != null && loaded && !workspaceIdea) setWorkspaceId(null)
+  }, [workspaceId, workspaceIdea, loaded])
+
+  // Main asks for pending autosaves (window hidden / app quitting); also flush
+  // whenever the window gets hidden from the renderer's point of view.
+  useEffect(() => {
+    const offFlush = api.app.onFlushRequest((token) => {
+      void flushAll().finally(() => {
+        if (token) void api.app.flushDone(token)
+      })
+    })
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') void flushAll()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      offFlush()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
+
+  /** Opens the workspace; a "solta" idea must be linked to a project first. */
+  const openWorkspace = (id: number): void => {
+    const idea = ideas.find((i) => i.id === id)
+    if (!idea) return
+    if (idea.projects.length === 0) setLinkPrompt(idea)
+    else setWorkspaceId(idea.id)
+  }
 
   // Leave a project view if the project was removed.
   useEffect(() => {
@@ -58,6 +95,7 @@ export function App(): React.JSX.Element {
   // Keyboard: Ctrl+F / Ctrl+K focus search, Esc clears search or closes the panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (workspaceId != null) return // the workspace (Excalidraw) owns the keyboard
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'k')) {
         e.preventDefault()
         searchRef.current?.focus()
@@ -69,7 +107,7 @@ export function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [query, selectedId])
+  }, [query, selectedId, workspaceId])
 
   const go = (v: View): void => {
     setView(v)
@@ -103,7 +141,8 @@ export function App(): React.JSX.Element {
   const listProps = {
     projectsById,
     selectedId,
-    onSelect: (id: number) => setSelectedId((cur) => (cur === id ? null : id))
+    onSelect: (id: number) => setSelectedId((cur) => (cur === id ? null : id)),
+    onOpen: openWorkspace
   }
 
   let title = ''
@@ -205,6 +244,20 @@ export function App(): React.JSX.Element {
   } else if (view.kind === 'settings') {
     title = 'Configurações'
     content = <SettingsView settings={settings} info={info} />
+  }
+
+  if (workspaceIdea) {
+    return (
+      <Workspace
+        key={workspaceIdea.id}
+        idea={workspaceIdea}
+        projects={projects}
+        onBack={() => {
+          setSelectedId(workspaceIdea.id)
+          setWorkspaceId(null)
+        }}
+      />
+    )
   }
 
   return (
@@ -315,6 +368,19 @@ export function App(): React.JSX.Element {
           projects={projects}
           onClose={() => setSelectedId(null)}
           onOpenProject={(id) => go({ kind: 'project', id })}
+          onOpenWorkspace={() => openWorkspace(selectedIdea.id)}
+        />
+      )}
+
+      {linkPrompt && (
+        <LinkProjectDialog
+          idea={linkPrompt}
+          projects={projects}
+          onClose={() => setLinkPrompt(null)}
+          onLinked={(idea) => {
+            setLinkPrompt(null)
+            setWorkspaceId(idea.id)
+          }}
         />
       )}
 

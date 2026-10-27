@@ -3,7 +3,8 @@ import { IDEA_STATUSES, IDEA_STATUS_LABELS, type Idea, type IdeaStatus, type Pro
 import { StatusBadge } from './StatusBadge'
 import { ConfirmDialog } from './Modal'
 import { ProjectDialog } from './ProjectDialog'
-import { IconArchive, IconFolder, IconLink, IconPlus, IconRestore, IconStar, IconTrash, IconX } from './Icons'
+import { LinkMenu } from './LinkMenu'
+import { IconArchive, IconBoard, IconLink, IconRestore, IconStar, IconTrash, IconX } from './Icons'
 import { fullDate } from '../lib/format'
 import { useToast } from './Toasts'
 
@@ -14,10 +15,17 @@ interface Props {
   projects: Project[]
   onClose: () => void
   onOpenProject: (id: number) => void
+  onOpenWorkspace: () => void
 }
 
 /** Side panel to edit an idea: title/body inline, status, project links, archive/delete. */
-export function IdeaPanel({ idea, projects, onClose, onOpenProject }: Props): React.JSX.Element {
+export function IdeaPanel({
+  idea,
+  projects,
+  onClose,
+  onOpenProject,
+  onOpenWorkspace
+}: Props): React.JSX.Element {
   const toast = useToast()
   const [title, setTitle] = useState(idea.title)
   const [body, setBody] = useState(idea.body)
@@ -103,6 +111,10 @@ export function IdeaPanel({ idea, projects, onClose, onOpenProject }: Props): Re
             }
           }}
         />
+
+        <button className="btn btn-primary panel-open" onClick={onOpenWorkspace}>
+          <IconBoard /> Abrir workspace
+        </button>
 
         <textarea
           className="panel-text"
@@ -233,55 +245,5 @@ export function IdeaPanel({ idea, projects, onClose, onOpenProject }: Props): Re
         />
       )}
     </aside>
-  )
-}
-
-function LinkMenu({
-  projects,
-  onPick,
-  onNew,
-  onClose
-}: {
-  projects: Project[]
-  onPick: (id: number) => void
-  onNew: () => void
-  onClose: () => void
-}): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const onDown = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
-    }
-    document.addEventListener('mousedown', onDown)
-    window.addEventListener('keydown', onKey, true)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('keydown', onKey, true)
-    }
-  }, [onClose])
-
-  return (
-    <div className="menu" ref={ref} role="menu">
-      {projects.length === 0 && <div className="menu-empty">Nenhum outro projeto</div>}
-      {projects.map((p) => (
-        <button key={p.id} className="menu-item" role="menuitem" onClick={() => onPick(p.id)}>
-          <IconFolder />
-          <span className="menu-item-text">
-            <span>{p.name}</span>
-            <span className="link-path">{p.folderPath}</span>
-          </span>
-        </button>
-      ))}
-      <div className="menu-sep" />
-      <button className="menu-item accent" role="menuitem" onClick={onNew}>
-        <IconPlus /> Novo projeto…
-      </button>
-    </div>
   )
 }

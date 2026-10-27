@@ -93,6 +93,47 @@ export const IconRestore = ({ size, ...p }: IconProps): React.JSX.Element => (
     <path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4" />
   </svg>
 )
+export const IconBoard = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M7 15l3-4 3 3 4-5" />
+  </svg>
+)
+export const IconDoc = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+    <path d="M14 3v5h5M9 13h6M9 17h4" />
+  </svg>
+)
+export const IconTasks = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <rect x="3" y="4" width="6" height="5" rx="1" />
+    <rect x="15" y="4" width="6" height="5" rx="1" />
+    <rect x="9" y="15" width="6" height="5" rx="1" />
+    <path d="M6 9v3h12V9M12 12v3" />
+  </svg>
+)
+export const IconChat = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M4 5h16v11H9l-5 4z" />
+  </svg>
+)
+export const IconArrowLeft = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </svg>
+)
+export const IconCheck = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+)
+export const IconPanelRight = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M15 4v16" />
+  </svg>
+)
 export const IconKeyboard = ({ size, ...p }: IconProps): React.JSX.Element => (
   <svg {...base(size, p)}>
     <rect x="2.5" y="6" width="19" height="12" rx="2" />
