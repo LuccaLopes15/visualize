@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ChatBlock, ChatEvent, ChatMessage, ClaudeError, ClaudeStatus } from '@shared/chat'
+import type { ChatMessage, ClaudeError, ClaudeStatus } from '@shared/chat'
+import { applyLiveEvent, type LiveTurn } from './liveTurn'
 
 const api = window.api
-
-export interface LiveTurn {
-  blocks: ChatBlock[]
-}
 
 export interface ChatController {
   loaded: boolean
@@ -22,34 +19,6 @@ export interface ChatController {
   stop: () => void
   reset: () => Promise<void>
   recheck: () => Promise<void>
-}
-
-/** Pure reducer for streaming events (exported for tests / reuse). */
-export function applyLiveEvent(live: LiveTurn | null, ev: ChatEvent): LiveTurn | null {
-  switch (ev.kind) {
-    case 'userMessage':
-      return { blocks: [] }
-    case 'textDelta': {
-      const blocks = [...(live?.blocks ?? [])]
-      const last = blocks.at(-1)
-      if (last?.type === 'text') blocks[blocks.length - 1] = { ...last, text: last.text + ev.text }
-      else blocks.push({ type: 'text', text: ev.text })
-      return { blocks }
-    }
-    case 'toolStart':
-      return { blocks: [...(live?.blocks ?? []), ev.tool] }
-    case 'toolEnd':
-      return {
-        blocks: (live?.blocks ?? []).map((b) =>
-          b.type === 'tool' && b.id === ev.id ? { ...b, status: ev.ok ? 'ok' : 'error', error: ev.error } : b
-        )
-      }
-    case 'assistantMessage':
-    case 'reset':
-      return null
-    default:
-      return live
-  }
 }
 
 const BLOCKING = new Set(['not_found', 'too_old', 'not_logged_in', 'spawn'])
