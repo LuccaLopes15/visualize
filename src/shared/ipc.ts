@@ -7,13 +7,17 @@
 import type {
   AppInfo,
   AppSettings,
+  BoardData,
+  BoardSaveInput,
   HotkeyStatus,
   Idea,
   IdeaPatch,
+  MacroPlan,
   NewIdeaInput,
   NewProjectInput,
   Project,
-  ProjectPatch
+  ProjectPatch,
+  SaveResult
 } from './types'
 
 export interface IpcContract {
@@ -41,8 +45,17 @@ export interface IpcContract {
   'capture:close': () => void
   'capture:resize': (height: number) => void
 
+  /** Board of an idea, or null if nothing was drawn yet. */
+  'boards:get': (ideaId: number) => BoardData | null
+  'boards:save': (ideaId: number, input: BoardSaveInput) => SaveResult
+
+  'macro:get': (ideaId: number) => MacroPlan
+  'macro:save': (ideaId: number, markdown: string) => SaveResult
+
   'app:info': () => AppInfo
   'app:openHub': () => void
+  /** Renderer acknowledges an `events:flushRequest` (pending autosaves written). */
+  'app:flushDone': (token: string) => void
 }
 
 export type IpcChannel = keyof IpcContract
@@ -52,5 +65,10 @@ export type IpcResult<C extends IpcChannel> = ReturnType<IpcContract[C]>
 /** Events pushed from main to renderer windows. */
 export const IpcEvents = {
   dataChanged: 'events:dataChanged',
-  captureShown: 'events:captureShown'
+  captureShown: 'events:captureShown',
+  /**
+   * Main asks the hub to write pending autosaves now (window hidden, app
+   * quitting). Payload: a token the renderer echoes back via `app:flushDone`.
+   */
+  flushRequest: 'events:flushRequest'
 } as const

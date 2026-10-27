@@ -50,6 +50,35 @@ export const migrations: Migration[] = [
         value TEXT NOT NULL
       );
     `
+  },
+  {
+    version: 2,
+    name: 'fase2_boards_macro_plans',
+    up: `
+      -- Excalidraw scene (elements + durable appState) as JSON, one per idea.
+      CREATE TABLE boards (
+        idea_id    INTEGER PRIMARY KEY REFERENCES ideas (id) ON DELETE CASCADE,
+        scene_json TEXT    NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      -- Images pasted into a board. Kept apart from the scene: they are large and
+      -- immutable (Excalidraw fileId), so autosave only writes the new ones.
+      CREATE TABLE board_files (
+        idea_id    INTEGER NOT NULL REFERENCES ideas (id) ON DELETE CASCADE,
+        file_id    TEXT    NOT NULL,
+        mime       TEXT    NOT NULL,
+        data_url   TEXT    NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (idea_id, file_id)
+      );
+
+      CREATE TABLE macro_plans (
+        idea_id    INTEGER PRIMARY KEY REFERENCES ideas (id) ON DELETE CASCADE,
+        markdown   TEXT    NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
+      );
+    `
   }
 ]
 

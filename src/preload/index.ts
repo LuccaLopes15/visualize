@@ -57,9 +57,19 @@ const api: VisualizeApi = {
     resize: (...a) => invoke('capture:resize', ...a),
     onShown: (cb) => subscribe<void>(IpcEvents.captureShown, cb)
   },
+  boards: {
+    get: (...a) => invoke('boards:get', ...a),
+    save: (...a) => invoke('boards:save', ...a)
+  },
+  macro: {
+    get: (...a) => invoke('macro:get', ...a),
+    save: (...a) => invoke('macro:save', ...a)
+  },
   app: {
     info: () => invoke('app:info'),
-    openHub: () => invoke('app:openHub')
+    openHub: () => invoke('app:openHub'),
+    flushDone: (...a) => invoke('app:flushDone', ...a),
+    onFlushRequest: (cb) => subscribe<string>(IpcEvents.flushRequest, cb)
   },
   onDataChanged: (cb) => subscribe<DataChangedEvent>(IpcEvents.dataChanged, cb)
 }

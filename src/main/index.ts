@@ -5,7 +5,8 @@ import { registerIpc } from './ipc'
 import { HotkeyManager, formatAccelerator } from './hotkey'
 import { applyAutostart, launchedHidden } from './autostart'
 import { createTray, refreshTrayMenu, trayNotify, type TrayActions } from './tray'
-import { createMainWindow, showMainWindow } from './windows/mainWindow'
+import { createMainWindow, getMainWindow, showMainWindow } from './windows/mainWindow'
+import { requestRendererFlush } from './flush'
 import { createCaptureWindow, showCaptureWindow } from './windows/captureWindow'
 import { appState } from './state'
 import { DEFAULT_SETTINGS } from '@shared/types'
@@ -100,8 +101,18 @@ async function bootstrap(): Promise<void> {
     if (BrowserWindow.getAllWindows().length === 0) showMainWindow()
   })
 
-  app.on('before-quit', () => {
+  // Before really quitting, let the hub write pending autosaves (board /
+  // plano macro are debounced ~800 ms). The first before-quit is deferred
+  // until the renderer acks (or a 3 s timeout), then we quit for real.
+  let flushedForQuit = false
+  app.on('before-quit', (event) => {
     appState.isQuitting = true
+    if (flushedForQuit) return
+    const win = getMainWindow()
+    if (!win || win.isDestroyed()) return
+    event.preventDefault()
+    flushedForQuit = true
+    void requestRendererFlush(win).finally(() => app.quit())
   })
 
   app.on('will-quit', () => {

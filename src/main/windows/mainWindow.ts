@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron'
 import appIcon from '../../../resources/icon.png?asset'
 import { hardenWebContents, loadPage, securePreferences } from './common'
 import { appState } from '../state'
+import { notifyRendererFlush } from '../flush'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -33,6 +34,12 @@ export function createMainWindow(showOnReady: boolean): BrowserWindow {
       mainWindow?.hide()
     }
   })
+  // Hidden to the tray / minimized / Windows logging off: write pending
+  // autosaves right away instead of waiting for the debounce.
+  mainWindow.on('hide', () => notifyRendererFlush(mainWindow))
+  mainWindow.on('minimize', () => notifyRendererFlush(mainWindow))
+  mainWindow.on('query-session-end', () => notifyRendererFlush(mainWindow))
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })

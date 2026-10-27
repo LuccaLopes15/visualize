@@ -85,3 +85,52 @@ export type DataEntity = 'ideas' | 'projects' | 'settings'
 export interface DataChangedEvent {
   entity: DataEntity
 }
+
+// ---- Fase 2: workspace (board + plano macro) ------------------------------
+
+/**
+ * A binary file referenced by an Excalidraw image element (pasted/dropped
+ * image). Mirrors Excalidraw's `BinaryFileData`; `id` is Excalidraw's fileId.
+ */
+export interface BoardFile {
+  id: string
+  mimeType: string
+  /** `data:<mime>;base64,...` */
+  dataURL: string
+  created: number
+}
+
+/**
+ * Persisted Excalidraw scene. Main treats `elements` / `appState` as opaque
+ * JSON (only the renderer understands their shape); `appState` holds just the
+ * durable bits (viewport, grid, current tool styles), never selection/collaborators.
+ */
+export interface BoardScene {
+  elements: unknown[]
+  appState: Record<string, unknown>
+}
+
+export interface BoardData extends BoardScene {
+  files: BoardFile[]
+  updatedAt: number
+}
+
+export interface BoardSaveInput extends BoardScene {
+  /** Files not yet persisted (new since the last save). */
+  newFiles: BoardFile[]
+  /**
+   * Every fileId still referenced by an image element. Stored files outside
+   * this list are pruned, so deleted images don't pile up in the database.
+   */
+  referencedFileIds: string[]
+}
+
+export interface MacroPlan {
+  markdown: string
+  /** 0 when the idea has no plan yet. */
+  updatedAt: number
+}
+
+export interface SaveResult {
+  updatedAt: number
+}

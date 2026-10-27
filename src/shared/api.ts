@@ -39,9 +39,20 @@ export interface VisualizeApi {
     resize: Invoke<'capture:resize'>
     onShown: (cb: () => void) => Unsubscribe
   }
+  boards: {
+    get: Invoke<'boards:get'>
+    save: Invoke<'boards:save'>
+  }
+  macro: {
+    get: Invoke<'macro:get'>
+    save: Invoke<'macro:save'>
+  }
   app: {
     info: Invoke<'app:info'>
     openHub: Invoke<'app:openHub'>
+    flushDone: Invoke<'app:flushDone'>
+    /** Main wants pending autosaves flushed; reply with `flushDone(token)`. */
+    onFlushRequest: (cb: (token: string) => void) => Unsubscribe
   }
   /** Fires whenever main changes data; the renderer refetches that entity. */
   onDataChanged: (cb: (e: DataChangedEvent) => void) => Unsubscribe

@@ -1,10 +1,17 @@
 import { app, BrowserWindow, dialog } from 'electron'
-import type { IdeaPatch, NewIdeaInput, NewProjectInput, ProjectPatch } from '@shared/types'
+import type {
+  BoardSaveInput,
+  IdeaPatch,
+  NewIdeaInput,
+  NewProjectInput,
+  ProjectPatch
+} from '@shared/types'
 import type { Repositories } from '../db'
 import { notifyChanged } from '../events'
 import { handle, toId } from './handle'
 import { hideCaptureWindow, resizeCaptureWindow } from '../windows/captureWindow'
 import { showMainWindow } from '../windows/mainWindow'
+import { resolveFlush } from '../flush'
 
 export interface IpcDeps {
   repos: Repositories
@@ -117,6 +124,16 @@ export function registerIpc(deps: IpcDeps): void {
   handle('capture:close', () => hideCaptureWindow())
   handle('capture:resize', (height) => resizeCaptureWindow(Number(height)))
 
+  // ---- boards:* / macro:* (workspace) -----------------------------------
+  // Autosaves: no `dataChanged` broadcast (the only editor is the window
+  // that saved). Fase 3 will push Claude's board edits on its own channel.
+  handle('boards:get', (ideaId) => repos.boards.get(toId(ideaId, 'ideia')))
+  handle('boards:save', (ideaId, input: BoardSaveInput) =>
+    repos.boards.save(toId(ideaId, 'ideia'), input)
+  )
+  handle('macro:get', (ideaId) => repos.macroPlans.get(toId(ideaId, 'ideia')))
+  handle('macro:save', (ideaId, markdown) => repos.macroPlans.save(toId(ideaId, 'ideia'), markdown))
+
   // ---- app:* ------------------------------------------------------------
   handle('app:info', () => ({
     version: app.getVersion(),
@@ -128,6 +145,7 @@ export function registerIpc(deps: IpcDeps): void {
     hideCaptureWindow()
     showMainWindow()
   })
+  handle('app:flushDone', (token) => resolveFlush(token))
 }
 
 function pickIdeaPatch(patch: IdeaPatch): IdeaPatch {
