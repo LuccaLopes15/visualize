@@ -140,3 +140,33 @@ export const IconKeyboard = ({ size, ...p }: IconProps): React.JSX.Element => (
     <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
   </svg>
 )
+export const IconPen = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M4 20l4-1 11-11-3-3L5 16zM14 6l3 3" />
+  </svg>
+)
+export const IconFile = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" />
+  </svg>
+)
+export const IconSend = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M5 12h13M13 6l6 6-6 6" />
+  </svg>
+)
+export const IconStop = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" />
+  </svg>
+)
+export const IconNewChat = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M12 5H5v14h14v-7M17 3l4 4-8 8h-4v-4z" />
+  </svg>
+)
+export const IconAlert = ({ size, ...p }: IconProps): React.JSX.Element => (
+  <svg {...base(size, p)}>
+    <path d="M12 4l9 16H3zM12 10v4M12 17h.01" />
+  </svg>
+)

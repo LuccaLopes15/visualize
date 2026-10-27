@@ -47,6 +47,8 @@ export function MacroPlanTab({ ideaId, active, onStatus }: Props): React.JSX.Ele
     return m === 'edit' || m === 'preview' ? m : 'split'
   })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  /** Shown for a few seconds after Claude rewrites the plan. */
+  const [claudeNotice, setClaudeNotice] = useState(false)
 
   const autosave = useAutosave<string>(
     async (markdown) => {
@@ -66,6 +68,24 @@ export function MacroPlanTab({ ideaId, active, onStatus }: Props): React.JSX.Ele
       alive = false
     }
   }, [ideaId])
+
+  // Claude rewrote the plan (main already flushed our pending edits before
+  // writing): show the new content, drop anything still queued.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const off = api.macro.onUpdated((e) => {
+      if (e.ideaId !== ideaId) return
+      autosave.cancel()
+      setText(e.markdown)
+      setClaudeNotice(true)
+      clearTimeout(timer)
+      timer = setTimeout(() => setClaudeNotice(false), 6000)
+    })
+    return () => {
+      off()
+      clearTimeout(timer)
+    }
+  }, [ideaId]) // autosave.cancel only touches the stable Autosaver
 
   useEffect(() => {
     if (active && text !== null && mode !== 'preview') textareaRef.current?.focus()
@@ -126,7 +146,13 @@ export function MacroPlanTab({ ideaId, active, onStatus }: Props): React.JSX.Ele
             </button>
           ))}
         </div>
-        <span className="macro-hint">Markdown · Tab indenta · Enter continua listas</span>
+        {claudeNotice ? (
+          <span className="macro-claude-notice" role="status">
+            Atualizado pelo Claude
+          </span>
+        ) : (
+          <span className="macro-hint">Markdown · Tab indenta · Enter continua listas</span>
+        )}
         {text.trim() === '' && (
           <button className="btn btn-ghost macro-template" onClick={() => change(TEMPLATE)}>
             Usar modelo

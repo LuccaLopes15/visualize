@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, type AppInfo, type AppSettings } from '@shared/types'
 import { eventToAccelerator, formatAccelerator } from '../lib/accelerator'
 import { useToast } from './Toasts'
 import { IconKeyboard } from './Icons'
+import { ClaudeSettingsCard } from './ClaudeSettingsCard'
 
 const api = window.api
 
@@ -124,6 +125,8 @@ export function SettingsView({ settings, info }: Props): React.JSX.Element {
           </div>
         )}
       </section>
+
+      <ClaudeSettingsCard />
 
       <section className="settings-card">
         <div className="settings-text">

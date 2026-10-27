@@ -9,14 +9,16 @@ import {
   IconDoc,
   IconFolder,
   IconPanelRight,
-  IconTasks,
-  IconX
+  IconTasks
 } from '../components/Icons'
 import { useToast } from '../components/Toasts'
 import { flushAll, type SaveStatus } from '../lib/autosave'
 import { readPref, writePref } from '../lib/prefs'
 import { ProjectChips } from './ProjectChips'
 import { MacroPlanTab } from './MacroPlanTab'
+import { ChatPanel } from './chat/ChatPanel'
+import { useChat } from './chat/useChat'
+import { BOARD_CHANGED_EVENT } from './board/ops'
 
 // Excalidraw is heavy: load it only when a workspace opens.
 const Board = lazy(() => import('./Board'))
@@ -29,6 +31,7 @@ interface Props {
   idea: Idea
   projects: Project[]
   onBack: () => void
+  onOpenSettings: () => void
 }
 
 /**
@@ -36,11 +39,29 @@ interface Props {
  * (Board / Plano macro / Tarefas[Fase 4]) and the right-side chat slot
  * (Fase 3). Both tabs stay mounted so Excalidraw keeps its undo history.
  */
-export function Workspace({ idea, projects, onBack }: Props): React.JSX.Element {
+export function Workspace({ idea, projects, onBack, onOpenSettings }: Props): React.JSX.Element {
   const toast = useToast()
   const [tab, setTab] = useState<Tab>(() => (readPref('ws.tab') === 'macro' ? 'macro' : 'board'))
   const [chatOpen, setChatOpen] = useState(() => readPref('ws.chatOpen') === '1')
   const [status, setStatus] = useState<Record<Tab, SaveStatus>>({ board: 'idle', macro: 'idle' })
+
+  const chat = useChat(idea.id)
+  /** Claude changed the board while another tab was visible. */
+  const [boardBadge, setBoardBadge] = useState(false)
+
+  // Leaving the workspace ends the Claude process (history + session are kept).
+  useEffect(() => () => void api.chat.close(idea.id), [idea.id])
+
+  useEffect(() => {
+    const onChanged = (e: Event): void => {
+      if ((e as CustomEvent<{ ideaId: number }>).detail?.ideaId === idea.id) setBoardBadge(true)
+    }
+    window.addEventListener(BOARD_CHANGED_EVENT, onChanged)
+    return () => window.removeEventListener(BOARD_CHANGED_EVENT, onChanged)
+  }, [idea.id])
+  useEffect(() => {
+    if (tab === 'board') setBoardBadge(false)
+  }, [tab, boardBadge])
 
   const primary = idea.projects.find((l) => l.isPrimary)
   const primaryProject = primary ? projects.find((p) => p.id === primary.projectId) : undefined
@@ -77,6 +98,11 @@ export function Workspace({ idea, projects, onBack }: Props): React.JSX.Element 
     onBack()
   }
 
+  const openSettings = async (): Promise<void> => {
+    await flushAll()
+    onOpenSettings()
+  }
+
   return (
     <div className="ws">
       <header className="ws-header">
@@ -108,6 +134,7 @@ export function Workspace({ idea, projects, onBack }: Props): React.JSX.Element 
           onClick={() => switchTab('board')}
         >
           <IconBoard /> Board
+          {boardBadge && tab !== 'board' && <span className="ws-tab-dot" title="O Claude alterou o board" />}
         </button>
         <button
           role="tab"
@@ -142,7 +169,11 @@ export function Workspace({ idea, projects, onBack }: Props): React.JSX.Element 
             <MacroPlanTab ideaId={idea.id} active={tab === 'macro'} onStatus={onMacroStatus} />
           </section>
         </div>
-        <ChatSlot open={chatOpen} onToggle={toggleChat} />
+        {chatOpen ? (
+          <ChatPanel chat={chat} onCollapse={toggleChat} onOpenSettings={() => void openSettings()} />
+        ) : (
+          <ChatRail onToggle={toggleChat} busy={chat.busy} />
+        )}
       </div>
     </div>
   )
@@ -215,34 +246,15 @@ function SaveIndicator({ status, onRetry }: { status: SaveStatus; onRetry: () =>
   )
 }
 
-/** Reserved slot for the Claude chat (Fase 3). Collapsed by default. */
-function ChatSlot({ open, onToggle }: { open: boolean; onToggle: () => void }): React.JSX.Element {
-  if (!open) {
-    return (
-      <aside className="ws-chat collapsed">
-        <button className="ws-chat-rail" onClick={onToggle} title="Abrir chat com Claude">
-          <IconChat />
-          <span>Chat</span>
-        </button>
-      </aside>
-    )
-  }
+/** Collapsed chat: a thin rail on the right. */
+function ChatRail({ onToggle, busy }: { onToggle: () => void; busy: boolean }): React.JSX.Element {
   return (
-    <aside className="ws-chat" aria-label="Chat com Claude">
-      <header className="ws-chat-head">
+    <aside className="ws-chat collapsed">
+      <button className="ws-chat-rail" onClick={onToggle} title="Abrir chat com Claude">
         <IconChat />
-        <span>Chat com Claude</span>
-        <button className="icon-btn" onClick={onToggle} title="Recolher">
-          <IconX size={14} />
-        </button>
-      </header>
-      <div className="ws-chat-empty">
-        <IconChat size={22} />
-        <p>Chat com Claude — Fase 3</p>
-        <p className="muted small">
-          O Claude vai conversar sobre a ideia, ler o código do projeto principal e desenhar no board.
-        </p>
-      </div>
+        <span>Chat</span>
+        {busy && <span className="ws-chat-rail-busy" title="O Claude está respondendo" />}
+      </button>
     </aside>
   )
 }

@@ -4,6 +4,7 @@ import { Autosaver, registerFlusher, type SaveStatus } from '../lib/autosave'
 export interface AutosaveHandle<T> {
   schedule: (value: T) => void
   flush: () => Promise<void>
+  cancel: () => void
   status: SaveStatus
 }
 
@@ -45,5 +46,5 @@ export function useAutosave<T>(
     }
   }, [saver])
 
-  return { schedule: (v) => saver.schedule(v), flush: () => saver.flush(), status }
+  return { schedule: (v) => saver.schedule(v), flush: () => saver.flush(), cancel: () => saver.cancel(), status }
 }

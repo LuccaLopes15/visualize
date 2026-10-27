@@ -11,6 +11,7 @@ import { LinkProjectDialog } from './components/LinkProjectDialog'
 import { DeleteIdeaDialog } from './components/DeleteIdeaDialog'
 import { Workspace } from './workspace/Workspace'
 import { flushAll } from './lib/autosave'
+import { applyBoardOp } from './workspace/board/ops'
 import { useToast } from './components/Toasts'
 import {
   IconArchive,
@@ -62,6 +63,16 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     if (workspaceId != null && loaded && !workspaceIdea) setWorkspaceId(null)
   }, [workspaceId, workspaceIdea, loaded])
+
+  // Claude's board tools: apply on the live board and answer main. Registered
+  // here (not in the workspace) so a request always gets a reply.
+  useEffect(
+    () =>
+      api.chat.onBoardRequest((req) => {
+        void applyBoardOp(req.ideaId, req.op).then((result) => api.chat.boardReply(req.requestId, result))
+      }),
+    []
+  )
 
   // Main asks for pending autosaves (window hidden / app quitting); also flush
   // whenever the window gets hidden from the renderer's point of view.
@@ -267,6 +278,10 @@ export function App(): React.JSX.Element {
         onBack={() => {
           setSelectedId(workspaceIdea.id)
           setWorkspaceId(null)
+        }}
+        onOpenSettings={() => {
+          setWorkspaceId(null)
+          go({ kind: 'settings' })
         }}
       />
     )

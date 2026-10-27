@@ -55,6 +55,17 @@ export class Autosaver<T> {
     await this.inflight
   }
 
+  /**
+   * Drops the queued value without saving (content was replaced from
+   * elsewhere, e.g. Claude rewrote the plano macro). An in-flight save still
+   * completes.
+   */
+  cancel(): void {
+    this.clearTimer()
+    this.pending = null
+    if (!this.inflight) this.setStatus('saved')
+  }
+
   /** Stops the timer without saving (call `flush()` first if needed). */
   dispose(): void {
     this.clearTimer()
