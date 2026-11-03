@@ -28,7 +28,7 @@ import { projectColor } from './colors'
 import { TasksActionsContext, type TasksActions } from './context'
 import { diffNewIds } from './diff'
 import { DepEdge } from './edges'
-import { buildFlow, pruneIds } from './flow'
+import { buildFlow, FIT_VIEW, pruneIds } from './flow'
 import { IconDir, IconRelayout } from './icons'
 import { type LayoutDir } from './layout'
 import { LaneNode, NODE_DIMENSIONS, StoryNode, TaskNode, type LaneData, type PlanNodeData } from './nodes'
@@ -48,7 +48,7 @@ const api = window.api
 const ACCENT = '#8b6cff'
 const nodeTypes = { story: StoryNode, task: TaskNode, lane: LaneNode }
 const edgeTypes = { dep: DepEdge }
-const FIT = { padding: 0.15, minZoom: 0.5, maxZoom: 1, duration: 300 } as const
+const FIT = FIT_VIEW
 const HIGHLIGHT_MS = 2600
 
 interface Props {

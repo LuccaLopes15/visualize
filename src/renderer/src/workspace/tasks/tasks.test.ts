@@ -3,7 +3,7 @@ import { resolvePlanNodes } from '@shared/plan'
 import type { PlanGraph, PlanNode, RawPlanNode } from '@shared/types'
 import { PROJECT_PALETTE, projectColor } from './colors'
 import { diffNewIds } from './diff'
-import { buildFlow, depHandles, pruneIds, visibleNodes } from './flow'
+import { buildFlow, depHandles, FIT_VIEW, pruneIds, visibleNodes } from './flow'
 import { layoutPlan, LANE_GAP, nodeSize, type Rect } from './layout'
 import { checkConnection, deleteImpact, depCandidates, descriptionPreview, moveSibling, parentOptions } from './ops'
 
@@ -332,5 +332,26 @@ describe('descriptionPreview', () => {
     const out = descriptionPreview('x'.repeat(300), 20)
     expect(out).toHaveLength(20)
     expect(out.endsWith('…')).toBe(true)
+  })
+})
+
+describe('FIT_VIEW', () => {
+  it('fits a typical breakdown (2 stories x 5 tasks) in a 1100x600 canvas without being clamped by minZoom', () => {
+    const rows: RawPlanNode[] = []
+    for (const [s, project] of [['S1', 1], ['S2', 2]] as const) {
+      rows.push(raw(s, 'story', null, s === 'S1' ? 0 : 1, project))
+      for (let i = 0; i < 5; i++) rows.push(raw(`${s}-T${i}`, 'task', s, i))
+    }
+    const graph: PlanGraph = { ideaId: 1, nodes: resolvePlanNodes(rows), deps: [] }
+    for (const dir of ['TB', 'LR'] as const) {
+      const m = buildFlow(graph, { dir, collapsed: new Set() })
+      const x0 = Math.min(...m.lanes.map((l) => l.x))
+      const y0 = Math.min(...m.lanes.map((l) => l.y))
+      const w = Math.max(...m.lanes.map((l) => l.x + l.w)) - x0
+      const h = Math.max(...m.lanes.map((l) => l.y + l.h)) - y0
+      const k = 1 + 2 * FIT_VIEW.padding
+      const needed = Math.min(1100 / (w * k), 600 / (h * k))
+      expect(needed).toBeGreaterThanOrEqual(FIT_VIEW.minZoom)
+    }
   })
 })

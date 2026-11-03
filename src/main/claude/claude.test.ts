@@ -285,6 +285,7 @@ describe('resolve helpers', () => {
     expect(p).toContain('tasks_replace_all')
     expect(p).toContain('UMA story por projeto')
     expect(p).toContain('aba Tarefas')
+    expect(p).toContain('Nunca escreva ids de nós')
   })
 })
 

@@ -1,7 +1,7 @@
 # Visualize
 
 App Windows para capturar ideias em 2 segundos e, depois, transformá-las em plano executável.
-Design completo e fases: ver o plano do projeto. **Estado atual: Fase 3 (Claude no workspace).**
+Design completo e fases: ver o plano do projeto. **Estado atual: Fase 4 (aba Tarefas + plano de tarefas no Claude).**
 
 ## Comandos
 
@@ -72,3 +72,14 @@ resources/           ícones (app e bandeja)
 - **Plano de tarefas (Fase 4, camada de dados)**: stories/tasks/dependências em `plan_nodes`/`plan_deps` (migration v4),
   regras em `src/main/db/repositories/plan.ts` + `src/shared/plan.ts` (helpers puros), `PlanService` em `src/main/plan/`
   e canais `plan:*`. Contrato completo (tipos, semântica de `replaceAll`/`mergeAdd`, erros, eventos): `docs/fase4-contract.md`.
+- **Tarefas (Fase 4, uso)**: a aba **Tarefas** do workspace mostra o plano como grafo (React Flow + layout dagre):
+  stories (uma por projeto, coloridas por projeto), tasks e sub-tasks (aresta sólida "filha") e dependências (tracejada,
+  "depende de"; podem cruzar stories/projetos; ciclos são barrados). Edição manual: **+ História**, duplo clique renomeia,
+  painel lateral (descrição em Markdown, projeto da story, pai, ordem, dependências), arrastar da borda de um cartão até
+  outro liga (modo "Dependência" ou "Filha"; Alt inverte), Delete apaga (com confirmação), **Reorganizar** reaplica o layout.
+  Pelo chat: "quebra o plano macro em tarefas por projeto" gera tudo de uma vez (`tasks_replace_all`); depois peça mudanças
+  incrementais ("adiciona uma subtarefa de testes na tarefa X", "a tarefa Y depende da Z") ou "lê as tarefas e me diz o que
+  mudou". A aba atualiza ao vivo (ponto na aba quando Claude muda o plano com outra aba ativa; nós novos piscam). Nós com
+  ticket do Azure DevOps (Fase 5) mostram `#id`, marcam "desatualizado" se título/descrição mudarem e Claude nunca os apaga.
+- **Teste manual end-to-end**: `VISUALIZE_USER_DATA=<pasta> npm run dev` (perfil separado), com modelo `sonnet` em
+  Configurações para gastar pouco.

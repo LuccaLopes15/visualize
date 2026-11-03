@@ -162,3 +162,10 @@ export function pruneIds(ids: ReadonlySet<string>, graph: PlanGraph): Set<string
   for (const id of ids) if (alive.has(id)) out.add(id)
   return out.size === ids.size ? (ids as Set<string>) : out
 }
+
+/**
+ * Options for `fitView`. The minimum zoom must stay low enough for a typical
+ * breakdown (2 stories x 5 tasks side by side is ~2900 px wide) to fit a ~1100 px
+ * canvas; with 0.5 the graph came out cropped on both sides (see tasks.test.ts).
+ */
+export const FIT_VIEW = { padding: 0.12, minZoom: 0.2, maxZoom: 1, duration: 300 } as const
