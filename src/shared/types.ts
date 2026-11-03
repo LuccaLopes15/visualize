@@ -289,10 +289,20 @@ export interface PlanDeleteResult {
   ticketed: { id: string; title: string; devopsId: number }[]
 }
 
+/** A dependency plus its Fase 5 link state (`PlanService.depLinks`); not exposed over IPC. */
+export interface PlanDepLink extends PlanDep {
+  /** When the DevOps relation was created; null = not linked yet. */
+  devopsLinkedAt: number | null
+}
+
 /** Input for Fase 5 (`PlanService.setDevops`); not exposed over IPC. */
 export interface PlanDevopsPatch {
   devopsId: number | null
   devopsUrl: string | null
-  /** Sync time (ms); null clears it. */
-  syncedAt: number | null
+  /**
+   * `updatedAt` of the node SNAPSHOT that was sent to DevOps (read before the request), NOT "now".
+   * It becomes `devopsSyncedAt`, so edits made while the request was in flight still show as stale.
+   * null clears the sync mark (unlinking).
+   */
+  sentUpdatedAt: number | null
 }

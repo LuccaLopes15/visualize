@@ -29,7 +29,8 @@ beforeEach(async () => {
         return { updatedAt: 2 }
       }
     },
-    plan: new PlanService(createRepositories(':memory:').plan)
+    plan: new PlanService(createRepositories(':memory:').plan),
+    flushPending: async () => undefined
   })
   await server.start()
 })

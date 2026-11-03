@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { PlanService } from '../plan/service'
 import { registerPlanTools } from './planTools'
+import { guard, text, type ToolResult } from './toolResult'
 import { ADD_KINDS, BOARD_COLORS, SHAPE_KINDS, type BoardOp, type BoardOpResult } from '@shared/board'
 
 export interface McpToolDeps {
@@ -16,21 +17,11 @@ export interface McpToolDeps {
   }
   /** Task graph (Fase 4); every mutation notifies the open Tarefas tab. */
   plan: PlanService
-}
-
-type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
-
-const text = (t: string, isError = false): ToolResult => ({
-  content: [{ type: 'text', text: t }],
-  ...(isError ? { isError: true } : {})
-})
-
-async function guard(fn: () => Promise<ToolResult>): Promise<ToolResult> {
-  try {
-    return await fn()
-  } catch (err) {
-    return text(`Erro: ${err instanceof Error ? err.message : String(err)}`, true)
-  }
+  /**
+   * Asks the renderer to write pending autosaves (macro plan, task drafts). Awaited before every
+   * tasks_* call so Claude reads / overwrites what the user really sees.
+   */
+  flushPending: () => Promise<void>
 }
 
 const boardResult = (r: BoardOpResult): ToolResult => text(r.text, !r.ok)
@@ -227,7 +218,7 @@ export function registerVisualizeTools(server: McpServer, ideaId: number, deps: 
   )
 
   // ---- plano de tarefas (Fase 4) ------------------------------------------------
-  registerPlanTools(server, ideaId, deps.plan)
+  registerPlanTools(server, ideaId, deps.plan, deps.flushPending)
 }
 
 export function appendSection(markdown: string, heading: string, body: string): string {

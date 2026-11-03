@@ -75,7 +75,7 @@ describe('PlanService', () => {
   it('setDevops (Fase 5 hook) notifies and keeps the plan readable', () => {
     const s = plan.createNode(ideaId, { kind: 'story', title: 'S', projectId })
     events.length = 0
-    const n = plan.setDevops(ideaId, s.id, { devopsId: 5, devopsUrl: 'https://x', syncedAt: 1 })
+    const n = plan.setDevops(ideaId, s.id, { devopsId: 5, devopsUrl: 'https://x', sentUpdatedAt: 1 })
     expect(n.devopsId).toBe(5)
     expect(events).toEqual([ideaId])
   })

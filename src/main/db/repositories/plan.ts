@@ -7,6 +7,7 @@ import {
   type PlanAddSpec,
   type PlanDeleteResult,
   type PlanDep,
+  type PlanDepLink,
   type PlanDevopsPatch,
   type PlanGraph,
   type PlanNode,
@@ -212,6 +213,7 @@ export class PlanRepository {
           throw new PlanError('task_needs_parent', 'Uma task precisa de um pai (uma story ou outra task).')
         }
         const parent = this.getNode(ideaId, input.parentId)
+        this.assertDepth(parent.depth + 1)
         if (input.projectId != null && input.projectId !== parent.projectId) {
           throw new PlanError(
             'task_project_derived',
@@ -297,6 +299,12 @@ export class PlanRepository {
             : `${q(node.title)} não pode ficar dentro de ${q(parent.title)}: ela é ancestral dessa task (criaria um ciclo).`
         )
       }
+      // Depth cap: the moved subtree keeps its own height below the new parent.
+      const resolved = resolvePlanNodes(all)
+      const movedIds = new Set(collectSubtree(resolved, nodeId))
+      const moved = resolved.filter((n) => movedIds.has(n.id))
+      const height = Math.max(...moved.map((n) => n.depth)) - (moved.find((n) => n.id === nodeId) as PlanNode).depth
+      this.assertDepth((resolved.find((n) => n.id === parentId) as PlanNode).depth + 1 + height)
       const oldParent = node.parentId
       this.db.prepare('UPDATE plan_nodes SET parent_id = ? WHERE id = ?').run(parentId, nodeId)
       this.placeAt(ideaId, parentId, nodeId, pos)
@@ -398,6 +406,14 @@ export class PlanRepository {
     return this.db.transaction((): PlanWriteResult => {
       this.ensureIdea(ideaId)
       if (!isObj(spec)) throw new PlanError('spec_invalid', 'O plano precisa ser um objeto { stories, deps }.')
+      // A missing/mistyped list must never read as "empty plan" (that would delete everything):
+      // clearing the plan is only possible by sending `stories: []` explicitly.
+      if (!Array.isArray(spec.stories)) {
+        throw new PlanError(
+          'spec_invalid',
+          'O plano precisa da lista "stories" (envie stories: [] apenas se a intenção for esvaziar o plano).'
+        )
+      }
       const existing = this.rawNodes(ideaId)
       const existingById = new Map(existing.map((n) => [n.id, n]))
       const flat = this.flatten(ideaId, spec.stories, { allowIds: true, topParent: null }, existingById)
@@ -413,7 +429,8 @@ export class PlanRepository {
         .map((n) => ({ id: n.id, title: n.title, devopsId: n.devopsId as number }))
       if (ticketed.length > 0 && !opts.force) throw ticketedError(ticketed)
 
-      // 1. all deps go (re-inserted at the end)
+      // 1. all deps go (re-inserted at the end; the DevOps link state of the pairs that survive is kept)
+      const linkedDeps = this.depLinks(ideaId).filter((d) => d.devopsLinkedAt !== null)
       this.db
         .prepare('DELETE FROM plan_deps WHERE from_id IN (SELECT id FROM plan_nodes WHERE idea_id = ?)')
         .run(ideaId)
@@ -464,6 +481,8 @@ export class PlanRepository {
       for (const n of removed) del.run(n.id)
       // 5. dependencies
       this.insertDeps(deps, realId)
+      const relink = this.db.prepare('UPDATE plan_deps SET devops_linked_at = ? WHERE from_id = ? AND to_id = ?')
+      for (const d of linkedDeps) relink.run(d.devopsLinkedAt, d.fromId, d.toId)
 
       const idMap: Record<string, string> = {}
       for (const n of flat.nodes) for (const k of n.keys) idMap[k] = realId.get(n.uid) as string
@@ -481,6 +500,7 @@ export class PlanRepository {
     return this.db.transaction((): PlanWriteResult => {
       this.ensureIdea(ideaId)
       if (!isObj(spec)) throw new PlanError('spec_invalid', 'O spec precisa ser um objeto { nodes, deps }.')
+      if (!Array.isArray(spec.nodes)) throw new PlanError('spec_invalid', 'O spec precisa da lista "nodes".')
       const topParent = parentId == null ? null : this.getNode(ideaId, parentId)
       const existing = this.rawNodes(ideaId)
       const existingById = new Map(existing.map((n) => [n.id, n]))
@@ -516,11 +536,18 @@ export class PlanRepository {
     })()
   }
 
-  // ---- Fase 5 hook -------------------------------------------------------------------
+  // ---- Fase 5 hooks ------------------------------------------------------------------
 
-  /** Stores (or clears) the Azure DevOps link of a node. Does NOT touch `updatedAt`. */
+  /**
+   * Stores (or clears) the Azure DevOps link of a node. Does NOT touch `updatedAt`.
+   *
+   * Sync rule: `sentUpdatedAt` is the `updatedAt` of the node SNAPSHOT that was sent to DevOps
+   * (read before the request), never "now". `devopsStale` is `updatedAt > devopsSyncedAt`, so an edit made
+   * while the request was in flight (updatedAt moved past the snapshot) still shows as stale.
+   * A snapshot newer than the node itself is impossible and rejected.
+   */
   setDevops(ideaId: number, nodeId: string, patch: PlanDevopsPatch): PlanNode {
-    this.requireNode(ideaId, nodeId)
+    const node = this.requireNode(ideaId, nodeId)
     const num = (v: unknown, what: string): number | null => {
       if (v === null) return null
       if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
@@ -530,13 +557,52 @@ export class PlanRepository {
     }
     const url = patch.devopsUrl
     if (url !== null && typeof url !== 'string') throw new PlanError('invalid_input', 'URL do work item inválida.')
+    const sent = num(patch.sentUpdatedAt, 'Versão enviada (updatedAt do snapshot)')
+    if (sent !== null && sent > node.updatedAt) {
+      throw new PlanError(
+        'invalid_input',
+        'A versão enviada ao DevOps não pode ser mais nova que o nó: informe o updatedAt lido antes do envio.'
+      )
+    }
     this.db
       .prepare('UPDATE plan_nodes SET devops_id = ?, devops_url = ?, devops_synced_at = ? WHERE id = ?')
-      .run(num(patch.devopsId, 'Id do work item'), url, num(patch.syncedAt, 'Data de sincronização'), nodeId)
+      .run(num(patch.devopsId, 'Id do work item'), url, sent, nodeId)
     return this.getNode(ideaId, nodeId)
   }
 
+  /** Dependencies of the idea with their DevOps link state (`devopsLinkedAt` null = relation not created yet). */
+  depLinks(ideaId: number): PlanDepLink[] {
+    this.ensureIdea(ideaId)
+    return this.db
+      .prepare(
+        `SELECT d.from_id AS fromId, d.to_id AS toId, d.devops_linked_at AS devopsLinkedAt FROM plan_deps d
+         JOIN plan_nodes n ON n.id = d.from_id WHERE n.idea_id = ? ORDER BY d.rowid`
+      )
+      .all(ideaId) as PlanDepLink[]
+  }
+
+  /** Marks (`linkedAt` = timestamp) or clears (null) the DevOps relation of a dependency. false = dependency does not exist. */
+  setDepLinked(ideaId: number, fromId: string, toId: string, linkedAt: number | null): boolean {
+    this.requireNode(ideaId, fromId)
+    this.requireNode(ideaId, toId)
+    if (linkedAt !== null && (typeof linkedAt !== 'number' || !Number.isInteger(linkedAt) || linkedAt < 0)) {
+      throw new PlanError('invalid_input', 'Data do vínculo inválida.')
+    }
+    return (
+      this.db
+        .prepare('UPDATE plan_deps SET devops_linked_at = ? WHERE from_id = ? AND to_id = ?')
+        .run(linkedAt, fromId, toId).changes > 0
+    )
+  }
+
   // ---- internals -------------------------------------------------------------------
+
+  /** `depth` = the `PlanNode.depth` the deepest node would reach (story = 0). Same cap as a spec (50 levels). */
+  private assertDepth(depth: number): void {
+    if (depth + 1 > PLAN_SPEC_MAX_DEPTH) {
+      throw new PlanError('invalid_input', `A hierarquia pode ter no máximo ${PLAN_SPEC_MAX_DEPTH} níveis.`)
+    }
+  }
 
   private ensureIdea(ideaId: number): void {
     if (!this.db.prepare('SELECT 1 FROM ideas WHERE id = ?').get(ideaId)) {

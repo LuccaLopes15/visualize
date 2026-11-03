@@ -99,7 +99,9 @@ async function bootstrap(): Promise<void> {
           return res
         }
       },
-      plan
+      plan,
+      // Task drafts (Tarefas tab) are written before Claude reads / changes the plan.
+      flushPending: () => requestRendererFlush(getMainWindow())
     },
     app.getVersion()
   )

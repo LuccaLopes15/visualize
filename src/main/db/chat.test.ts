@@ -19,7 +19,7 @@ describe('migration v3 (chat)', () => {
       db,
       migrations.filter((m) => m.version <= 2)
     )
-    expect(runMigrations(db)).toEqual([3, 4])
+    expect(runMigrations(db)).toEqual([3, 4, 5])
     expect(db.prepare('SELECT COUNT(*) c FROM chat_messages').get()).toEqual({ c: 0 })
   })
 })

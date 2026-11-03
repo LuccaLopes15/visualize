@@ -10,6 +10,7 @@ let repos: Repositories
 let plan: PlanService
 let server: VisualizeMcpServer
 let events: number[]
+let flushes = 0
 let clients: Client[]
 let ideaA: number
 let ideaB: number
@@ -20,6 +21,7 @@ beforeEach(async () => {
   let clock = 1_000
   repos = createRepositories(':memory:', () => ++clock)
   events = []
+  flushes = 0
   plan = new PlanService(repos.plan, (id) => events.push(id))
   apiId = repos.projects.create({ name: 'API', folderPath: 'C:/api' }).id
   webId = repos.projects.create({ name: 'Web', folderPath: 'C:/web' }).id
@@ -31,7 +33,10 @@ beforeEach(async () => {
   server = new VisualizeMcpServer({
     board: async () => ({ ok: true, text: '' }),
     macro: { read: async () => ({ markdown: '', updatedAt: 1 }), write: async () => ({ updatedAt: 1 }) },
-    plan
+    plan,
+    flushPending: async () => {
+      flushes++
+    }
   })
   await server.start()
   clients = []
@@ -86,8 +91,8 @@ describe('tasks_read', () => {
   it('formats stories, tree, descriptions, deps and ticket status', async () => {
     const { story, t1, t2 } = seed()
     const sub = plan.createNode(ideaA, { kind: 'task', title: 'Escrever testes', parentId: t1 })
-    plan.setDevops(ideaA, t1, { devopsId: 4321, devopsUrl: 'http://x', syncedAt: Date.now() + 10_000 })
-    plan.setDevops(ideaA, t2, { devopsId: 4322, devopsUrl: 'http://y', syncedAt: null })
+    plan.setDevops(ideaA, t1, { devopsId: 4321, devopsUrl: 'http://x', sentUpdatedAt: plan.getNode(ideaA, t1).updatedAt })
+    plan.setDevops(ideaA, t2, { devopsId: 4322, devopsUrl: 'http://y', sentUpdatedAt: null })
     const c = await connect(ideaA)
     const r = await call(c, 'tasks_read')
     expect(r.text).toBe(
@@ -170,7 +175,7 @@ describe('tasks_replace_all', () => {
 
   it('refuses to delete ticketed nodes and explains how to fix it; nothing changes', async () => {
     const { story, t1 } = seed()
-    plan.setDevops(ideaA, t1, { devopsId: 99, devopsUrl: 'u', syncedAt: 1 })
+    plan.setDevops(ideaA, t1, { devopsId: 99, devopsUrl: 'u', sentUpdatedAt: 1 })
     const before = JSON.stringify(plan.getGraph(ideaA))
     const c = await connect(ideaA)
     const r = await call(c, 'tasks_replace_all', { stories: [{ title: 'Outra', projectId: apiId }] })
@@ -193,7 +198,7 @@ describe('tasks_replace_all', () => {
 
   it('has no way to force: a "force" argument is ignored', async () => {
     const { t1 } = seed()
-    plan.setDevops(ideaA, t1, { devopsId: 99, devopsUrl: 'u', syncedAt: 1 })
+    plan.setDevops(ideaA, t1, { devopsId: 99, devopsUrl: 'u', sentUpdatedAt: 1 })
     const c = await connect(ideaA)
     const r = await call(c, 'tasks_replace_all', { stories: [{ title: 'X', projectId: apiId }], force: true })
     expect(r.isError).toBe(true)
@@ -281,7 +286,7 @@ describe('node editing tools', () => {
 
   it('tasks_update_node flags a ticketed node as stale', async () => {
     const { t1 } = seed()
-    plan.setDevops(ideaA, t1, { devopsId: 7, devopsUrl: 'u', syncedAt: 1 })
+    plan.setDevops(ideaA, t1, { devopsId: 7, devopsUrl: 'u', sentUpdatedAt: 1 })
     const c = await connect(ideaA)
     const r = await call(c, 'tasks_update_node', { nodeId: short(t1), title: 'Mudou' })
     expect(r.text).toContain('desatualizado')
@@ -333,7 +338,9 @@ describe('dependency tools', () => {
         { from: short(story), to: short(t1) } // valid
       ]
     })
-    expect(mixed.isError).toBe(true)
+    // Partial success is not an error: the per-pair list says what happened.
+    expect(mixed.isError).toBe(false)
+    expect(mixed.text).toContain('1 criada(s), 1 falhou(aram)')
     expect(mixed.text).toContain('FALHOU')
     expect(mixed.text).toContain('ok:')
     expect(plan.getGraph(ideaA).deps).toHaveLength(2)
@@ -360,7 +367,7 @@ describe('tasks_delete_node', () => {
 
   it('refuses ticketed subtrees (no force available)', async () => {
     const { story, t1 } = seed()
-    plan.setDevops(ideaA, t1, { devopsId: 55, devopsUrl: 'u', syncedAt: 1 })
+    plan.setDevops(ideaA, t1, { devopsId: 55, devopsUrl: 'u', sentUpdatedAt: 1 })
     const c = await connect(ideaA)
     const r = await call(c, 'tasks_delete_node', { nodeId: short(story), force: true })
     expect(r.isError).toBe(true)
@@ -428,5 +435,39 @@ describe('id helpers', () => {
     expect(out).not.toContain('Autenticação')
     expect(out).not.toContain('Projetos vinculados')
     expect(out).toContain(`STORY [${short(story)}]`)
+  })
+})
+
+describe('review fixes', () => {
+  it('every tasks_* call flushes the renderer first (user drafts are written before Claude reads/writes)', async () => {
+    const { t1, t2 } = seed()
+    const c = await connect(ideaA)
+    await call(c, 'tasks_read')
+    await call(c, 'tasks_update_node', { nodeId: short(t1), title: 'X' })
+    await call(c, 'tasks_add_dep', { deps: [{ from: short(t1), to: short(t2) }] })
+    expect(flushes).toBe(3)
+  })
+
+  it('does not truncate long tempIds in the write summary', async () => {
+    const c = await connect(ideaA)
+    const long = 'api-endpoint-de-autenticacao-do-usuario'
+    const r = await call(c, 'tasks_replace_all', { stories: [{ tempId: long, title: 'S', projectId: apiId }] })
+    expect(r.isError).toBe(false)
+    expect(r.text).toContain(`- ${long} → [`)
+  })
+
+  it('tasks_add_dep: partial success is not an error; only all-failed is', async () => {
+    const { story, t1, t2 } = seed()
+    const c = await connect(ideaA)
+    const partial = await call(c, 'tasks_add_dep', {
+      deps: [
+        { from: short(story), to: short(t1) },
+        { from: short(t1), to: short(t2) } // closes a cycle (t2 depends on t1 already)
+      ]
+    })
+    expect(partial.isError).toBe(false)
+    expect(partial.text).toMatch(/1 criada\(s\), 1 falhou/)
+    const allBad = await call(c, 'tasks_add_dep', { deps: [{ from: short(t1), to: short(t2) }] })
+    expect(allBad.isError).toBe(true)
   })
 })

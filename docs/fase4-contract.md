@@ -24,6 +24,7 @@ Referência para a UI (Tarefa 2) e para as tools MCP `tasks_*` (Tarefa 3). Tudo 
 - **Stories**: `projectId` obrigatório e tem que estar vinculado à ideia (`idea_projects`). Pode haver várias stories, em projetos diferentes.
 - **Tasks**: `parentId` obrigatório (story ou outra task **da mesma ideia**, qualquer profundidade). Passar `projectId` em task só é aceito se
   igual ao da story (senão `task_project_derived`).
+- **Profundidade máxima**: 50 níveis (story = nível 1), igual ao limite do spec; `createNode` e `setParent` (considerando a altura da subárvore movida) recusam passar disso (`invalid_input`).
 - **Hierarquia é floresta**: mover nó para si mesmo/descendente → `hierarchy_cycle`. Story não pode ter pai; task não pode virar raiz
   (`setParent` com `null` só vale para story, e só reordena).
 - **Dependências**: mesma ideia, sem auto-dependência, sem duplicata, **sem ciclo** (mensagem lista o ciclo: `"A" → "B" → "A"`). Podem cruzar
@@ -33,8 +34,8 @@ Referência para a UI (Tarefa 2) e para as tools MCP `tasks_*` (Tarefa 3). Tudo 
 - **Título**: trim, não vazio, ≤ 255. **Descrição**: markdown opcional, trim, ≤ 50.000 (`''` quando vazia).
 - **`updatedAt`** só muda quando título/descrição realmente mudam (mover/reordenar/trocar projeto não "suja" um ticket). `createdAt` fixo.
 - **Campos Fase 5** (`devopsId`, `devopsUrl`, `devopsSyncedAt`): `null` até a Fase 5. `PlanNode.devopsStale =
-  devopsId != null && (devopsSyncedAt == null || updatedAt > devopsSyncedAt)`. `PlanService.setDevops(ideaId, nodeId, {devopsId, devopsUrl, syncedAt})`
-  grava/limpa (só no main, sem canal IPC; não mexe em `updatedAt`).
+  devopsId != null && (devopsSyncedAt == null || updatedAt > devopsSyncedAt)`. `PlanService.setDevops(ideaId, nodeId, {devopsId, devopsUrl, sentUpdatedAt})`
+  grava/limpa (só no main, sem canal IPC; não mexe em `updatedAt`). Veja "Regra de sync da Fase 5" abaixo.
 - **Guard de desvincular/excluir projeto**: `IdeasRepository.unlinkProject` e `ProjectsRepository.delete` lançam `PlanError('project_in_use')`
   enquanto houver **stories** usando o projeto (mensagem lista as stories). A saída é mudar o projeto das stories (`updateNode {projectId}`) ou apagá-las.
   O FK `plan_nodes.project_id` é `RESTRICT` como rede de segurança. Tasks não bloqueiam (não guardam projeto). Os canais `ideas:unlinkProject` /
@@ -77,7 +78,9 @@ removeDep(ideaId, fromId, toId): boolean                    // false = não exis
 deleteNode(ideaId, nodeId, force = false): PlanDeleteResult // ticketed_nodes se a subárvore tem tickets e !force
 replaceAll(ideaId, PlanSpec, { force? }): PlanWriteResult
 mergeAdd(ideaId, PlanAddSpec, parentId?|null): PlanWriteResult
-setDevops(ideaId, nodeId, { devopsId, devopsUrl, syncedAt }): PlanNode   // Fase 5, sem IPC
+setDevops(ideaId, nodeId, { devopsId, devopsUrl, sentUpdatedAt }): PlanNode   // Fase 5, sem IPC
+depLinks(ideaId): PlanDepLink[]                              // Fase 5: deps + devopsLinkedAt (null = relação ainda não criada)
+setDepLinked(ideaId, fromId, toId, linkedAt|null): boolean   // Fase 5: marca/limpa a relação no DevOps (false = dep inexistente)
 ```
 
 Mapeamento sugerido para as tools: `tasks_read`→`overview`; `tasks_create_node`→`createNode`; `tasks_update_node`→`updateNode`;
@@ -85,10 +88,25 @@ Mapeamento sugerido para as tools: `tasks_read`→`overview`; `tasks_create_node
 vier `ticketed_nodes`, devolva a mensagem e deixe o usuário decidir); `tasks_replace_all`→`replaceAll` (sem `force`); `mergeAdd` para "adicione
 tasks sob X" sem risco de apagar.
 
+## Regra de sync da Fase 5 (`setDevops`, `depLinks`)
+
+- **`sentUpdatedAt` = `updatedAt` do SNAPSHOT do nó que foi enviado** (lido ANTES da chamada ao DevOps), nunca "agora". Vira `devopsSyncedAt`.
+  Assim, uma edição feita durante o request deixa `updatedAt > devopsSyncedAt` e o nó continua `devopsStale` (não perde a edição).
+  `setDevops` rejeita (`invalid_input`) um `sentUpdatedAt` maior que o `updatedAt` atual do nó (snapshot impossível). `null` limpa a marca (desvincular).
+  Fluxo: `const snap = plan.getNode(...)` → montar/enviar → `plan.setDevops(id, node, { devopsId, devopsUrl, sentUpdatedAt: snap.updatedAt })`.
+- **O que NÃO marca `devopsStale`**: só título/descrição mexem em `updatedAt`. Reparentar, reordenar, trocar o projeto da story e adicionar/remover
+  dependências em nós já com ticket **não** são rastreados como "desatualizado". A Fase 5 deve reconciliar isso por conta própria (ex.: comparar o pai/relações
+  atuais com o que está no DevOps antes de dar o nó por sincronizado).
+- **Vínculo de dependências é idempotente via `plan_deps.devops_linked_at`** (migration v5): `depLinks(ideaId)` lista todas as deps com `devopsLinkedAt`
+  (null = relação ainda não criada no DevOps); depois de criar a relação chame `setDepLinked(ideaId, from, to, Date.now())`. Remover e recriar a dep zera o marcador;
+  `replaceAll` preserva o marcador das dependências (mesmo par) que continuam no spec. Não é preciso consultar as relações do work item para evitar duplicatas.
+  (Se o usuário remover a relação direto no DevOps, o marcador fica desatualizado: a Fase 5 pode limpar com `setDepLinked(..., null)` após consultar.)
+
 ## `replaceAll(ideaId, spec, { force })` — semântica
 
 Substitui o grafo inteiro **atomicamente** (uma transação; qualquer violação desfaz tudo).
 
+0. **`spec.stories` é obrigatório e precisa ser uma lista** (senão `spec_invalid`): um campo ausente nunca vale como "plano vazio". Para esvaziar o plano de propósito envie `stories: []` (a proteção de nós ticketados continua valendo). O mesmo vale para `mergeAdd` (`nodes`) e para os handlers IPC `plan:*`, que validam o formato do payload no main (`src/main/ipc/planPayload.ts`).
 1. Nós do spec **sem `id`** são **criados** (UUID novo). `tempId` (opcional, único no spec, ≤100 chars) serve para `deps` e para o `idMap` devolvido.
 2. Nós do spec **com `id`** (id de nó existente **desta ideia**, no mesmo papel: nível de topo = story, aninhado = task) são **mantidos e
    atualizados no lugar**: mesmo UUID, `createdAt` e campos `devops_*`; título/descrição/pai/projeto/ordem passam a ser os do spec.

@@ -9,6 +9,7 @@ import type {
 import type { Repositories } from '../db'
 import { notifyChanged } from '../events'
 import { handle, toId } from './handle'
+import { addSpecArg, indexArg, newNodeArg, nodeIdArg, orderedIdsArg, parentIdArg, patchArg, replaceSpecArg } from './planPayload'
 import { hideCaptureWindow, resizeCaptureWindow } from '../windows/captureWindow'
 import { showMainWindow } from '../windows/mainWindow'
 import { resolveFlush } from '../flush'
@@ -147,28 +148,30 @@ export function registerIpc(deps: IpcDeps): void {
   const { plan } = deps
   handle('plan:getGraph', (ideaId) => plan.getGraph(toId(ideaId, 'ideia')))
   handle('plan:overview', (ideaId) => plan.overview(toId(ideaId, 'ideia')))
-  handle('plan:createNode', (ideaId, input) => plan.createNode(toId(ideaId, 'ideia'), input))
+  handle('plan:createNode', (ideaId, input) => plan.createNode(toId(ideaId, 'ideia'), newNodeArg(input)))
   handle('plan:updateNode', (ideaId, nodeId, patch) =>
-    plan.updateNode(toId(ideaId, 'ideia'), nodeId, patch)
+    plan.updateNode(toId(ideaId, 'ideia'), nodeIdArg(nodeId), patchArg(patch))
   )
   handle('plan:setParent', (ideaId, nodeId, parentId, index) =>
-    plan.setParent(toId(ideaId, 'ideia'), nodeId, parentId ?? null, index ?? undefined)
+    plan.setParent(toId(ideaId, 'ideia'), nodeIdArg(nodeId), parentIdArg(parentId), indexArg(index))
   )
   handle('plan:reorder', (ideaId, parentId, orderedIds) =>
-    plan.reorder(toId(ideaId, 'ideia'), parentId ?? null, orderedIds)
+    plan.reorder(toId(ideaId, 'ideia'), parentIdArg(parentId), orderedIdsArg(orderedIds))
   )
-  handle('plan:addDep', (ideaId, fromId, toNodeId) => plan.addDep(toId(ideaId, 'ideia'), fromId, toNodeId))
+  handle('plan:addDep', (ideaId, fromId, toNodeId) =>
+    plan.addDep(toId(ideaId, 'ideia'), nodeIdArg(fromId), nodeIdArg(toNodeId))
+  )
   handle('plan:removeDep', (ideaId, fromId, toNodeId) =>
-    plan.removeDep(toId(ideaId, 'ideia'), fromId, toNodeId)
+    plan.removeDep(toId(ideaId, 'ideia'), nodeIdArg(fromId), nodeIdArg(toNodeId))
   )
   handle('plan:deleteNode', (ideaId, nodeId, force) =>
-    plan.deleteNode(toId(ideaId, 'ideia'), nodeId, force === true)
+    plan.deleteNode(toId(ideaId, 'ideia'), nodeIdArg(nodeId), force === true)
   )
   handle('plan:replaceAll', (ideaId, spec, force) =>
-    plan.replaceAll(toId(ideaId, 'ideia'), spec, { force: force === true })
+    plan.replaceAll(toId(ideaId, 'ideia'), replaceSpecArg(spec), { force: force === true })
   )
   handle('plan:mergeAdd', (ideaId, spec, parentId) =>
-    plan.mergeAdd(toId(ideaId, 'ideia'), spec, parentId ?? null)
+    plan.mergeAdd(toId(ideaId, 'ideia'), addSpecArg(spec), parentIdArg(parentId))
   )
 
   // ---- chat:* / claude:* (Fase 3) ----------------------------------------

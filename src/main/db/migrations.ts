@@ -144,6 +144,15 @@ export const migrations: Migration[] = [
       );
       CREATE INDEX idx_plan_deps_to ON plan_deps (to_id);
     `
+  },
+  {
+    version: 5,
+    name: 'fase4_plan_dep_devops_link',
+    up: `
+      -- Fase 5: when the DevOps relation of this dependency was created (NULL = not linked yet),
+      -- so linking dependencies is idempotent without querying the work item relations.
+      ALTER TABLE plan_deps ADD COLUMN devops_linked_at INTEGER;
+    `
   }
 ]
 

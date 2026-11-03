@@ -41,7 +41,7 @@ describe('migration v2', () => {
       migrations.filter((m) => m.version === 1)
     )
     db.prepare("INSERT INTO ideas (title, created_at, updated_at) VALUES ('antiga', 1, 1)").run()
-    expect(runMigrations(db)).toEqual([2, 3, 4])
+    expect(runMigrations(db)).toEqual([2, 3, 4, 5])
     expect(db.prepare('SELECT title FROM ideas').get()).toEqual({ title: 'antiga' })
     expect(db.prepare('SELECT COUNT(*) c FROM boards').get()).toEqual({ c: 0 })
   })

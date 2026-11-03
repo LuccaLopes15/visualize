@@ -11,6 +11,7 @@ import type {
   PlanAddSpec,
   PlanDeleteResult,
   PlanDep,
+  PlanDepLink,
   PlanDevopsPatch,
   PlanGraph,
   PlanNode,
@@ -89,6 +90,18 @@ export class PlanService {
   /** Fase 5: store/clear the DevOps link of a node (no IPC channel; main-side only). */
   setDevops(ideaId: number, nodeId: string, patch: PlanDevopsPatch): PlanNode {
     return this.changed(ideaId, this.repo.setDevops(ideaId, nodeId, patch))
+  }
+
+  /** Fase 5: dependencies with their DevOps relation state (for idempotent linking). */
+  depLinks(ideaId: number): PlanDepLink[] {
+    return this.repo.depLinks(ideaId)
+  }
+
+  /** Fase 5: marks/clears the DevOps relation of a dependency. false = the dependency does not exist. */
+  setDepLinked(ideaId: number, fromId: string, toId: string, linkedAt: number | null): boolean {
+    const ok = this.repo.setDepLinked(ideaId, fromId, toId, linkedAt)
+    if (ok) this.notify(ideaId)
+    return ok
   }
 
   private changed<T>(ideaId: number, result: T): T {

@@ -58,7 +58,7 @@ describe('migration v4', () => {
       db,
       migrations.filter((m) => m.version <= 3)
     )
-    expect(runMigrations(db)).toEqual([4])
+    expect(runMigrations(db)).toEqual([4, 5])
     expect(db.prepare('SELECT COUNT(*) c FROM plan_nodes').get()).toEqual({ c: 0 })
     expect(db.prepare('SELECT COUNT(*) c FROM plan_deps').get()).toEqual({ c: 0 })
   })
@@ -438,7 +438,7 @@ describe('deleteNode', () => {
   it('guards ticketed nodes unless forced', () => {
     const s = story('S')
     const t = task(s.id, 'T')
-    plan().setDevops(ideaId, t.id, { devopsId: 123, devopsUrl: 'https://x/123', syncedAt: 5 })
+    plan().setDevops(ideaId, t.id, { devopsId: 123, devopsUrl: 'https://x/123', sentUpdatedAt: 5 })
     expectPlanError(() => plan().deleteNode(ideaId, s.id), 'ticketed_nodes', /#123 "T"/)
     expect(titles()).toEqual(['S', 'T'])
     const res = plan().deleteNode(ideaId, s.id, true)
@@ -512,25 +512,95 @@ describe('idea deletion', () => {
 describe('devops columns', () => {
   it('setDevops stores the link without bumping updatedAt; edits afterwards mark it stale', () => {
     const s = story('S')
-    const linked = plan().setDevops(ideaId, s.id, { devopsId: 77, devopsUrl: 'https://dev.azure.com/o/p/_workitems/edit/77', syncedAt: 5_000 })
-    expect(linked).toMatchObject({ devopsId: 77, devopsSyncedAt: 5_000, updatedAt: s.updatedAt })
+    const linked = plan().setDevops(ideaId, s.id, {
+      devopsId: 77,
+      devopsUrl: 'https://dev.azure.com/o/p/_workitems/edit/77',
+      sentUpdatedAt: s.updatedAt
+    })
+    expect(linked).toMatchObject({ devopsId: 77, devopsSyncedAt: s.updatedAt, updatedAt: s.updatedAt })
     expect(linked.devopsStale).toBe(false)
-    // Editing the title after the sync moves updatedAt (test clock ~1000s) past a sync time of 1.
-    plan().setDevops(ideaId, s.id, { devopsId: 77, devopsUrl: null, syncedAt: 1 })
     plan().updateNode(ideaId, s.id, { title: 'Novo título' })
     expect(plan().getNode(ideaId, s.id).devopsStale).toBe(true)
-    plan().setDevops(ideaId, s.id, { devopsId: 77, devopsUrl: null, syncedAt: 10_000_000 })
+    // Re-sending the fresh snapshot clears it.
+    plan().setDevops(ideaId, s.id, { devopsId: 77, devopsUrl: null, sentUpdatedAt: plan().getNode(ideaId, s.id).updatedAt })
     expect(plan().getNode(ideaId, s.id).devopsStale).toBe(false)
-    plan().setDevops(ideaId, s.id, { devopsId: null, devopsUrl: null, syncedAt: null })
+    plan().setDevops(ideaId, s.id, { devopsId: null, devopsUrl: null, sentUpdatedAt: null })
     expect(plan().getNode(ideaId, s.id).devopsStale).toBe(false)
   })
 
-  it('validates values', () => {
+  it('Fase 5 sync rule: an edit made while the request was in flight is still stale', () => {
+    const s = story('S')
+    const snapshot = plan().getNode(ideaId, s.id) // read before the request
+    plan().updateNode(ideaId, s.id, { description: 'editado durante o envio' }) // user edits meanwhile
+    const linked = plan().setDevops(ideaId, s.id, { devopsId: 5, devopsUrl: null, sentUpdatedAt: snapshot.updatedAt })
+    expect(linked.devopsSyncedAt).toBe(snapshot.updatedAt)
+    expect(linked.devopsStale).toBe(true)
+  })
+
+  it('rejects a snapshot newer than the node (not a real snapshot) and invalid values', () => {
     const s = story('S')
     expectPlanError(
-      () => plan().setDevops(ideaId, s.id, { devopsId: 'x' as never, devopsUrl: null, syncedAt: null }),
+      () => plan().setDevops(ideaId, s.id, { devopsId: 1, devopsUrl: null, sentUpdatedAt: s.updatedAt + 1 }),
+      'invalid_input',
+      /mais nova/
+    )
+    expectPlanError(
+      () => plan().setDevops(ideaId, s.id, { devopsId: 'x' as never, devopsUrl: null, sentUpdatedAt: null }),
       'invalid_input'
     )
+  })
+
+  it('depLinks / setDepLinked track the DevOps relation per dependency (idempotent linking)', () => {
+    const a = story('A')
+    const b = story('B', p2)
+    const c = story('C')
+    plan().addDep(ideaId, a.id, b.id)
+    plan().addDep(ideaId, c.id, b.id)
+    expect(plan().depLinks(ideaId)).toEqual([
+      { fromId: a.id, toId: b.id, devopsLinkedAt: null },
+      { fromId: c.id, toId: b.id, devopsLinkedAt: null }
+    ])
+    expect(plan().setDepLinked(ideaId, a.id, b.id, 777)).toBe(true)
+    expect(plan().setDepLinked(ideaId, a.id, c.id, 1)).toBe(false) // no such dependency
+    expect(plan().depLinks(ideaId).map((d) => d.devopsLinkedAt)).toEqual([777, null])
+    // The plain graph is unchanged (PlanDep stays { fromId, toId }).
+    expect(graph().deps[0]).toEqual({ fromId: a.id, toId: b.id })
+    // Removing and re-adding resets the state (a new relation has to be created).
+    plan().removeDep(ideaId, a.id, b.id)
+    plan().addDep(ideaId, a.id, b.id)
+    expect(plan().depLinks(ideaId).find((d) => d.fromId === a.id)?.devopsLinkedAt).toBeNull()
+  })
+
+  it('replaceAll keeps the link state of dependencies that survive', () => {
+    const a = story('A')
+    const b = story('B', p2)
+    plan().addDep(ideaId, a.id, b.id)
+    plan().setDepLinked(ideaId, a.id, b.id, 123)
+    plan().replaceAll(ideaId, {
+      stories: [
+        { id: a.id, title: 'A', projectId: p1 },
+        { id: b.id, title: 'B', projectId: p2 },
+        { tempId: 'n', title: 'N', projectId: p1 }
+      ],
+      deps: [
+        { from: a.id, to: b.id },
+        { from: 'n', to: a.id }
+      ]
+    })
+    const links = plan().depLinks(ideaId)
+    expect(links.find((d) => d.fromId === a.id)?.devopsLinkedAt).toBe(123)
+    expect(links.find((d) => d.toId === a.id)?.devopsLinkedAt).toBeNull()
+  })
+
+  it('migration v5 adds the column to a v4 database', () => {
+    const db = new Database(':memory:')
+    db.pragma('foreign_keys = ON')
+    runMigrations(
+      db,
+      migrations.filter((m) => m.version <= 4)
+    )
+    expect(runMigrations(db)).toEqual([5])
+    expect(db.prepare('SELECT devops_linked_at FROM plan_deps').all()).toEqual([])
   })
 })
 
@@ -680,8 +750,8 @@ describe('replaceAll', () => {
       story1 = story('S1', p1)
       taskA = task(story1.id, 'A')
       taskB = task(story1.id, 'B')
-      plan().setDevops(ideaId, story1.id, { devopsId: 10, devopsUrl: 'https://d/10', syncedAt: 99_999 })
-      plan().setDevops(ideaId, taskA.id, { devopsId: 11, devopsUrl: 'https://d/11', syncedAt: 99_999 })
+      plan().setDevops(ideaId, story1.id, { devopsId: 10, devopsUrl: 'https://d/10', sentUpdatedAt: story1.updatedAt })
+      plan().setDevops(ideaId, taskA.id, { devopsId: 11, devopsUrl: 'https://d/11', sentUpdatedAt: taskA.updatedAt })
     })
 
     it('rejects (ticketed_nodes) when the spec would drop ticketed nodes; nothing changes', () => {
@@ -695,7 +765,7 @@ describe('replaceAll', () => {
     })
 
     it('keeps ticketed nodes referenced by id (same uuid, devops fields intact), even re-parented/retitled', () => {
-      clock = 200_000 // edits below happen after the 99_999 sync
+      clock = 200_000 // edits below happen after the sync
       const res = plan().replaceAll(ideaId, {
         stories: [
           {
@@ -713,7 +783,7 @@ describe('replaceAll', () => {
       const g = graph()
       expect(titles(g)).toEqual(['S1', 'A renomeada', 'Nova', 'Outra'])
       const a = byTitle(g, 'A renomeada')
-      expect(a).toMatchObject({ id: taskA.id, devopsId: 11, devopsUrl: 'https://d/11', devopsSyncedAt: 99_999, devopsStale: true })
+      expect(a).toMatchObject({ id: taskA.id, devopsId: 11, devopsUrl: 'https://d/11', devopsSyncedAt: taskA.updatedAt, devopsStale: true })
       expect(byTitle(g, 'S1')).toMatchObject({ id: story1.id, devopsId: 10, devopsStale: false, createdAt: story1.createdAt })
       expect(g.deps).toHaveLength(2)
     })
@@ -852,5 +922,60 @@ describe('mergeAdd', () => {
     expectPlanError(() => plan().mergeAdd(ideaId, { nodes: [{ title: 'X' }] }, 'ghost'), 'not_found')
     expectPlanError(() => plan().mergeAdd(ideaId, { nodes: [{ tempId: s.id, title: 'X' }] }, s.id), 'spec_invalid')
     expect(titles()).toEqual(['S'])
+  })
+})
+
+describe('review fixes: replaceAll without stories (M2)', () => {
+  it('a spec without a stories list is rejected and nothing is deleted', () => {
+    const s = story('S')
+    task(s.id, 'T')
+    const before = JSON.stringify(graph())
+    for (const bad of [{}, { deps: [] }, { stories: null }, { stories: 'x' }, { stories: {} }, null, [] as never]) {
+      expectPlanError(() => plan().replaceAll(ideaId, bad as never), 'spec_invalid', /stories/)
+    }
+    expect(JSON.stringify(graph())).toBe(before)
+  })
+
+  it('an explicit empty list still clears the plan (and keeps ticketed protection)', () => {
+    const s = story('S')
+    const t = task(s.id, 'T')
+    plan().setDevops(ideaId, t.id, { devopsId: 9, devopsUrl: null, sentUpdatedAt: t.updatedAt })
+    expectPlanError(() => plan().replaceAll(ideaId, { stories: [] }), 'ticketed_nodes')
+    expect(titles()).toEqual(['S', 'T'])
+    expect(plan().replaceAll(ideaId, { stories: [] }, { force: true }).deleted).toBe(2)
+    expect(graph().nodes).toEqual([])
+  })
+
+  it('mergeAdd requires a nodes list', () => {
+    expectPlanError(() => plan().mergeAdd(ideaId, {} as never), 'spec_invalid', /nodes/)
+  })
+})
+
+describe('review fixes: depth cap (L1)', () => {
+  const chain = (n: number): PlanNode => {
+    let cur: PlanNode = story('S0')
+    for (let i = 1; i < n; i++) cur = task(cur.id, `N${i}`)
+    return cur
+  }
+
+  it('createNode refuses to go past 50 levels (same cap as a spec)', () => {
+    const deepest = chain(50) // levels 1..50 => depth 49
+    expect(deepest.depth).toBe(49)
+    expectPlanError(() => task(deepest.id, 'one too many'), 'invalid_input', /50 níveis/)
+    expect(graph().nodes).toHaveLength(50)
+  })
+
+  it('setParent accounts for the height of the moved subtree', () => {
+    const deepest = chain(48) // depth 47
+    const other = story('Other', p2)
+    const mid = task(other.id, 'Mid')
+    task(mid.id, 'Leaf') // subtree height 1 (Mid + Leaf)
+    // Mid under depth 47 => Mid depth 48, Leaf depth 49: allowed
+    plan().setParent(ideaId, mid.id, deepest.id)
+    expect(plan().getNode(ideaId, mid.id).depth).toBe(48)
+    // one more level on top of the subtree would exceed the cap
+    const lone = task(other.id, 'Lone')
+    const leaf2 = graph().nodes.find((n) => n.title === 'Leaf') as PlanNode
+    expectPlanError(() => plan().setParent(ideaId, lone.id, leaf2.id), 'invalid_input', /50 níveis/)
   })
 })

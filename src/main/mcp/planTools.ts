@@ -9,12 +9,7 @@ import type { PlanGraph, PlanSpecDep, PlanSpecNode, PlanWriteResult } from '@sha
 import type { PlanService } from '../plan/service'
 import { ToolInputError, formatOverview, nodeLabel, resolveNodeRef, shortId, idLength } from './planFormat'
 
-type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
-
-const text = (t: string, isError = false): ToolResult => ({
-  content: [{ type: 'text', text: t }],
-  ...(isError ? { isError: true } : {})
-})
+import { errorMessage, text, type ToolResult } from './toolResult'
 
 const HINTS: Partial<Record<PlanErrorCode, string>> = {
   not_found: 'Use tasks_read para ver os ids atuais.',
@@ -33,9 +28,14 @@ const HINTS: Partial<Record<PlanErrorCode, string>> = {
   invalid_input: 'Revise os parâmetros informados.'
 }
 
-function planGuard(tool: string, ticketedHint: string) {
+/**
+ * Wraps a tasks_* body: first flushes the user's pending edits (task drafts, macro plan) so the tool
+ * reads and overwrites what the user really sees, then turns rule violations into model-friendly errors.
+ */
+function planGuard(tool: string, ticketedHint: string, flush: () => Promise<void>) {
   return async (fn: () => ToolResult): Promise<ToolResult> => {
     try {
+      await flush().catch(() => undefined)
       return fn()
     } catch (err) {
       if (err instanceof PlanError) {
@@ -45,7 +45,7 @@ function planGuard(tool: string, ticketedHint: string) {
       if (err instanceof ToolInputError) {
         return text(`Erro (${tool}): ${err.message}${err.hint ? `\nComo corrigir: ${err.hint}` : ''}`, true)
       }
-      return text(`Erro (${tool}): ${err instanceof Error ? err.message : String(err)}`, true)
+      return text(`Erro (${tool}): ${errorMessage(err)}`, true)
     }
   }
 }
@@ -183,7 +183,7 @@ function writeSummary(plan: PlanService, ideaId: number, head: string, result: P
   const tempIds = Object.entries(result.idMap)
   if (tempIds.length) {
     lines.push('Ids reais (tempId → id):')
-    for (const [temp, real] of tempIds) lines.push(`- ${temp.length > 20 ? temp.slice(0, 8) : temp} → [${real.slice(0, len)}]`)
+    for (const [temp, real] of tempIds) lines.push(`- ${temp} → [${real.slice(0, len)}]`)
   }
   if (graph.nodes.length <= OUTLINE_MAX_NODES) {
     lines.push('', 'Plano atual:', formatOverview(overview, { titlesOnly: true, omitProjects: true, rootId }))
@@ -195,7 +195,14 @@ function writeSummary(plan: PlanService, ideaId: number, head: string, result: P
 
 // ---- registration ---------------------------------------------------------------
 
-export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanService): void {
+export function registerPlanTools(
+  server: McpServer,
+  ideaId: number,
+  plan: PlanService,
+  flushPending: () => Promise<void>
+): void {
+  const guard = (tool: string, ticketedHint = '') => planGuard(tool, ticketedHint, flushPending)
+
   server.registerTool(
     'tasks_read',
     {
@@ -212,7 +219,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       annotations: { readOnlyHint: true }
     },
     ({ nodeId, full }) =>
-      planGuard('tasks_read', '')(() => {
+      guard('tasks_read')(() => {
         const overview = plan.overview(ideaId)
         const rootId = nodeId ? resolveNodeRef(overview.graph, nodeId) : undefined
         return text(formatOverview(overview, { full: full || !!rootId, rootId }))
@@ -232,7 +239,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       annotations: { destructiveHint: true }
     },
     ({ stories, deps }) =>
-      planGuard('tasks_replace_all', REPLACE_TICKETED_HINT)(() => {
+      guard('tasks_replace_all', REPLACE_TICKETED_HINT)(() => {
         const graph = plan.getGraph(ideaId)
         const tempIds = new Set<string>()
         const spec = { stories: convertNodes(graph, stories as RawSpecNode[], tempIds), deps: convertDeps(graph, deps, tempIds) }
@@ -264,7 +271,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       }
     },
     ({ parentId, nodes, deps }) =>
-      planGuard('tasks_add', '')(() => {
+      guard('tasks_add')(() => {
         const graph = plan.getGraph(ideaId)
         const parent = parentId ? resolveNodeRef(graph, parentId) : null
         const tempIds = new Set<string>()
@@ -288,7 +295,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       }
     },
     ({ nodeId, title, description, projectId }) =>
-      planGuard('tasks_update_node', '')(() => {
+      guard('tasks_update_node')(() => {
         if (title === undefined && description === undefined && projectId === undefined) {
           throw new ToolInputError('Nada para alterar.', 'Informe title, description e/ou projectId.')
         }
@@ -317,7 +324,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       }
     },
     ({ nodeId, parentId, index }) =>
-      planGuard('tasks_set_parent', '')(() => {
+      guard('tasks_set_parent')(() => {
         const graph = plan.getGraph(ideaId)
         const node = plan.setParent(ideaId, resolveNodeRef(graph, nodeId), resolveNodeRef(graph, parentId), index)
         const fresh = plan.getGraph(ideaId)
@@ -337,7 +344,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       }
     },
     ({ parentId, orderedIds }) =>
-      planGuard('tasks_reorder', '')(() => {
+      guard('tasks_reorder')(() => {
         const graph = plan.getGraph(ideaId)
         const parent = parentId ? resolveNodeRef(graph, parentId) : null
         plan.reorder(
@@ -363,15 +370,17 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       inputSchema: { deps: depPairs }
     },
     ({ deps }) =>
-      planGuard('tasks_add_dep', '')(() => {
+      guard('tasks_add_dep')(() => {
         const graph = plan.getGraph(ideaId)
         const lines: string[] = []
         let failed = 0
+        let created = 0
         for (const d of deps) {
           try {
             const from = resolveNodeRef(graph, d.from)
             const to = resolveNodeRef(graph, d.to)
             plan.addDep(ideaId, from, to)
+            created++
             lines.push(`ok: ${nodeLabel(graph, from)} depende de ${nodeLabel(graph, to)}`)
           } catch (err) {
             if (!(err instanceof PlanError || err instanceof ToolInputError)) throw err
@@ -379,7 +388,9 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
             lines.push(`FALHOU (${d.from} → ${d.to}): ${err.message}`)
           }
         }
-        return text(lines.join('\n'), failed > 0)
+        // Partial success is NOT an error: the per-pair list says what was created and what failed.
+        const summary = failed === 0 ? '' : `${created} criada(s), ${failed} falhou(aram):\n`
+        return text(summary + lines.join('\n'), created === 0 && failed > 0)
       })
   )
 
@@ -391,7 +402,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       inputSchema: { deps: depPairs }
     },
     ({ deps }) =>
-      planGuard('tasks_remove_dep', '')(() => {
+      guard('tasks_remove_dep')(() => {
         const graph = plan.getGraph(ideaId)
         const lines = deps.map((d) => {
           const from = resolveNodeRef(graph, d.from)
@@ -413,7 +424,7 @@ export function registerPlanTools(server: McpServer, ideaId: number, plan: PlanS
       annotations: { destructiveHint: true }
     },
     ({ nodeId }) =>
-      planGuard('tasks_delete_node', DELETE_TICKETED_HINT)(() => {
+      guard('tasks_delete_node', DELETE_TICKETED_HINT)(() => {
         const graph = plan.getGraph(ideaId)
         const id = resolveNodeRef(graph, nodeId)
         const subtreeIds = new Set(collectSubtree(graph.nodes, id))
