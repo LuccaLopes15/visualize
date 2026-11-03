@@ -15,6 +15,7 @@ import {
   IconSend,
   IconSettings,
   IconStop,
+  IconTasks,
   IconX
 } from '../../components/Icons'
 import type { ChatController } from './useChat'
@@ -26,6 +27,7 @@ const DEFAULT_W = 380
 const SUGGESTIONS = [
   'Desenhe no board um fluxo desta ideia',
   'Escreva um plano macro inicial para esta ideia',
+  'Quebre o plano macro em tarefas por projeto',
   'Que partes do código esta ideia vai afetar?'
 ]
 
@@ -276,7 +278,7 @@ function Markdown({ text }: { text: string }): React.JSX.Element {
 
 function ToolChip({ tool }: { tool: ChatToolBlock }): React.JSX.Element {
   const kind = toolKind(tool.name)
-  const Icon = kind === 'board' ? IconPen : kind === 'macro' ? IconDoc : kind === 'read' ? IconFile : IconSearch
+  const Icon = kind === 'board' ? IconPen : kind === 'macro' ? IconDoc : kind === 'tasks' ? IconTasks : kind === 'read' ? IconFile : IconSearch
   return (
     <div className={`chat-tool ${tool.status}`} title={tool.error ? `${tool.label}: ${tool.error}` : tool.name}>
       <Icon size={13} />

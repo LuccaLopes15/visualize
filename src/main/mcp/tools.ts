@@ -3,6 +3,8 @@
 // idea id parameter, so a chat session can never touch another idea.
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { PlanService } from '../plan/service'
+import { registerPlanTools } from './planTools'
 import { ADD_KINDS, BOARD_COLORS, SHAPE_KINDS, type BoardOp, type BoardOpResult } from '@shared/board'
 
 export interface McpToolDeps {
@@ -12,6 +14,8 @@ export interface McpToolDeps {
     read: (ideaId: number) => Promise<{ markdown: string; updatedAt: number }>
     write: (ideaId: number, markdown: string) => Promise<{ updatedAt: number }>
   }
+  /** Task graph (Fase 4); every mutation notifies the open Tarefas tab. */
+  plan: PlanService
 }
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -221,6 +225,9 @@ export function registerVisualizeTools(server: McpServer, ideaId: number, deps: 
         return text(`Seção "${heading.replace(/^#+\s*/, '')}" acrescentada ao plano macro.`)
       })
   )
+
+  // ---- plano de tarefas (Fase 4) ------------------------------------------------
+  registerPlanTools(server, ideaId, deps.plan)
 }
 
 export function appendSection(markdown: string, heading: string, body: string): string {

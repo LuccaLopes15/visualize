@@ -11,7 +11,7 @@ import { cleanClaudeEnv } from './env'
 import { parseAuthStatus, parseShimTarget, parseVersion } from './resolve'
 import { ChatSession } from './session'
 import { createRepositories } from '../db'
-import { compareVersions, describeTool, type ChatEvent } from '@shared/chat'
+import { compareVersions, describeTool, toolKind, type ChatEvent } from '@shared/chat'
 
 describe('NdjsonParser', () => {
   it('handles lines split across chunks and CRLF', () => {
@@ -150,9 +150,30 @@ describe('args & env', () => {
     expect(val('--input-format')).toBe('stream-json')
     expect(val('--output-format')).toBe('stream-json')
     expect(val('--tools')).toBe('Read,Glob,Grep')
-    expect(val('--allowedTools')).toBe('Read,Glob,Grep,mcp__visualize__*')
-    expect(val('--disallowedTools')).toContain('Edit')
-    expect(val('--disallowedTools')).toContain('Bash')
+    const allowed = val('--allowedTools').split(',')
+    expect(allowed.slice(0, 3)).toEqual(['Read', 'Glob', 'Grep'])
+    for (const t of [
+      'tasks_read',
+      'tasks_replace_all',
+      'tasks_add',
+      'tasks_update_node',
+      'tasks_set_parent',
+      'tasks_reorder',
+      'tasks_add_dep',
+      'tasks_remove_dep',
+      'tasks_delete_node',
+      'macro_read',
+      'board_add_flow'
+    ]) {
+      expect(allowed).toContain(`mcp__visualize__${t}`)
+    }
+    // Read-only guarantee: nothing that writes files or runs commands is allowed.
+    for (const t of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch', 'Task']) {
+      expect(allowed).not.toContain(t)
+      expect(val('--disallowedTools').split(',')).toContain(t)
+    }
+    expect(allowed.every((t) => t.startsWith('mcp__visualize__') || ['Read', 'Glob', 'Grep'].includes(t))).toBe(true)
+    expect(val('--tools')).not.toMatch(/Edit|Write|Bash/)
     expect(val('--setting-sources')).toBe('project')
     expect(val('--permission-mode')).toBe('dontAsk')
     expect(args).toContain('--strict-mcp-config')
@@ -239,6 +260,31 @@ describe('resolve helpers', () => {
       'Desenhando fluxo no board'
     )
     expect(describeTool('mcp__visualize__board_add_flow', { nodes: [1, 2] }).summary).toBe('2 etapas')
+  })
+
+  it('has friendly pt-BR chips for the tasks_* tools', () => {
+    const label = (n: string, input: unknown = {}): string => describeTool(`mcp__visualize__${n}`, input).label
+    expect(label('tasks_read')).toBe('Lendo as tarefas')
+    expect(label('tasks_replace_all')).toBe('Montando as tarefas')
+    expect(label('tasks_add')).toBe('Adicionando tarefas')
+    expect(label('tasks_update_node')).toBe('Atualizando tarefa')
+    expect(label('tasks_set_parent')).toBe('Movendo tarefa')
+    expect(label('tasks_reorder')).toBe('Reordenando tarefas')
+    expect(label('tasks_add_dep')).toBe('Ligando dependência')
+    expect(label('tasks_remove_dep')).toBe('Removendo dependência')
+    expect(label('tasks_delete_node')).toBe('Apagando tarefa')
+    expect(describeTool('mcp__visualize__tasks_replace_all', { stories: [{}, {}] }).summary).toBe('2 stories')
+    expect(describeTool('mcp__visualize__tasks_add', { nodes: [{}] }).summary).toBe('1 item')
+    expect(describeTool('mcp__visualize__tasks_add_dep', { deps: [{}, {}] }).summary).toBe('2 dependências')
+    expect(describeTool('mcp__visualize__tasks_update_node', { title: 'Novo' }).summary).toBe('Novo')
+    expect(toolKind('mcp__visualize__tasks_read')).toBe('tasks')
+  })
+
+  it('tells Claude how to break the plan into tasks', () => {
+    const p = buildSystemPrompt({ title: 'T', body: '', projects: [] })
+    expect(p).toContain('tasks_replace_all')
+    expect(p).toContain('UMA story por projeto')
+    expect(p).toContain('aba Tarefas')
   })
 })
 

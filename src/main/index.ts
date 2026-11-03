@@ -76,6 +76,9 @@ async function bootstrap(): Promise<void> {
     return ok
   }
 
+  // Fase 4: plan graph service, shared by IPC handlers and the MCP tasks_* tools.
+  const plan = new PlanService(repos.plan, notifyPlanChanged)
+
   // ---- Fase 3: MCP server for Claude's tools + chat sessions ----------
   // Macro tools first ask the hub to write pending autosaves, so Claude reads
   // (and overwrites) what the user really sees.
@@ -95,7 +98,8 @@ async function bootstrap(): Promise<void> {
           if (win && !win.isDestroyed()) win.webContents.send(IpcEvents.macroUpdated, ev)
           return res
         }
-      }
+      },
+      plan
     },
     app.getVersion()
   )
@@ -116,9 +120,6 @@ async function bootstrap(): Promise<void> {
       if (win && !win.isDestroyed()) win.webContents.send(IpcEvents.chat, ev)
     }
   })
-
-  // Fase 4: plan graph service, shared by IPC handlers and (Tarefa 3) the MCP tools.
-  const plan = new PlanService(repos.plan, notifyPlanChanged)
 
   registerIpc({
     chat,

@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { BoardOp } from '@shared/board'
+import { createRepositories } from '../db'
+import { PlanService } from '../plan/service'
 import { VisualizeMcpServer } from './server'
 import { appendSection } from './tools'
+import { VISUALIZE_TOOL_NAMES } from './toolNames'
 
 let server: VisualizeMcpServer
 const plans = new Map<number, string>()
@@ -25,7 +28,8 @@ beforeEach(async () => {
         plans.set(ideaId, markdown)
         return { updatedAt: 2 }
       }
-    }
+    },
+    plan: new PlanService(createRepositories(':memory:').plan)
   })
   await server.start()
 })
@@ -78,8 +82,19 @@ describe('VisualizeMcpServer auth', () => {
       'board_update',
       'macro_append_section',
       'macro_read',
-      'macro_write'
+      'macro_write',
+      'tasks_add',
+      'tasks_add_dep',
+      'tasks_delete_node',
+      'tasks_read',
+      'tasks_remove_dep',
+      'tasks_reorder',
+      'tasks_replace_all',
+      'tasks_set_parent',
+      'tasks_update_node'
     ])
+    // The CLI's --allowedTools is built from this list: it must match what the server exposes.
+    expect([...VISUALIZE_TOOL_NAMES].sort()).toEqual(tools.map((t) => t.name).sort())
     await client.close()
   })
 

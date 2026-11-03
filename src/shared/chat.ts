@@ -123,14 +123,24 @@ const TOOL_LABELS: Record<string, string> = {
   board_delete: 'Apagando do board',
   macro_read: 'Lendo o plano macro',
   macro_write: 'Escrevendo o plano macro',
-  macro_append_section: 'Acrescentando ao plano macro'
+  macro_append_section: 'Acrescentando ao plano macro',
+  tasks_read: 'Lendo as tarefas',
+  tasks_replace_all: 'Montando as tarefas',
+  tasks_add: 'Adicionando tarefas',
+  tasks_update_node: 'Atualizando tarefa',
+  tasks_set_parent: 'Movendo tarefa',
+  tasks_reorder: 'Reordenando tarefas',
+  tasks_add_dep: 'Ligando dependência',
+  tasks_remove_dep: 'Removendo dependência',
+  tasks_delete_node: 'Apagando tarefa'
 }
 
 /** Kind of icon the chip shows. */
-export function toolKind(name: string): 'board' | 'macro' | 'read' | 'search' | 'other' {
+export function toolKind(name: string): 'board' | 'macro' | 'tasks' | 'read' | 'search' | 'other' {
   const n = name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
   if (n.startsWith('board_')) return 'board'
   if (n.startsWith('macro_')) return 'macro'
+  if (n.startsWith('tasks_')) return 'tasks'
   if (n === 'Read') return 'read'
   if (n === 'Glob' || n === 'Grep') return 'search'
   return 'other'
@@ -197,6 +207,25 @@ export function describeTool(
     case 'macro_append_section':
       summary = str('heading')
       break
+    case 'tasks_replace_all': {
+      const n = count('stories')
+      summary = n ? `${n} stor${n === 1 ? 'y' : 'ies'}` : ''
+      break
+    }
+    case 'tasks_add': {
+      const n = count('nodes')
+      summary = n ? `${n} ${n === 1 ? 'item' : 'itens'}` : ''
+      break
+    }
+    case 'tasks_update_node':
+      summary = str('title')
+      break
+    case 'tasks_add_dep':
+    case 'tasks_remove_dep': {
+      const n = count('deps')
+      summary = n ? `${n} dependência${n === 1 ? '' : 's'}` : ''
+      break
+    }
   }
   return { label, summary: clip(summary) }
 }

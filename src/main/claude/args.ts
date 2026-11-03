@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { visualizeAllowedTools } from '../mcp/toolNames'
 
 /** Built-in tools Claude may use: read-only access to the code. */
 export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'] as const
@@ -64,7 +65,7 @@ export function buildClaudeArgs(input: ClaudeArgsInput): string[] {
     '--tools',
     READ_ONLY_TOOLS.join(','),
     '--allowedTools',
-    [...READ_ONLY_TOOLS, 'mcp__visualize__*'].join(','),
+    [...READ_ONLY_TOOLS, ...visualizeAllowedTools()].join(','),
     '--disallowedTools',
     DENIED_TOOLS.join(','),
     // Anything not pre-approved is denied instead of prompting (headless).
@@ -109,7 +110,17 @@ Seu papel:
   - notas, caixas soltas, setas entre elementos existentes → board_add;
   - antes de alterar ou referenciar o que já existe, use board_read; depois board_update / board_delete pelos ids.
   - plano macro: macro_read antes de reescrever; macro_write substitui o documento inteiro; macro_append_section acrescenta uma seção.
+  - plano de tarefas (aba Tarefas): tasks_read, tasks_replace_all, tasks_add, tasks_update_node, tasks_set_parent, tasks_reorder, tasks_add_dep, tasks_remove_dep, tasks_delete_node (detalhes abaixo).
   Depois de desenhar ou escrever, diga em uma ou duas frases o que fez (não repita o conteúdo inteiro no chat).
+
+Quebrar o plano em tarefas (quando o usuário pedir "quebre em tarefas", "monte as tarefas" etc.):
+- Comece com tasks_read (estado atual + projetos vinculados com id) e macro_read (a fonte do trabalho). Leia o código real dos projetos (Read/Glob/Grep) para ancorar as tarefas em arquivos, classes e rotas que existem; se algo essencial estiver vago, pergunte antes de montar.
+- Estrutura: UMA story por projeto afetado (a ideia pode abranger vários projetos vinculados; use o projectId de tasks_read). Dentro da story, tasks concretas e entregáveis de forma independente (micro tasks de ~0,5 a 2 dias). Sub-tasks só quando agregarem clareza.
+- Títulos curtos, no imperativo, em pt-BR ("Criar endpoint de login"). Descrição em Markdown com contexto, critérios de aceite e notas técnicas (caminhos reais de arquivos); sem encher de texto.
+- Dependências só quando há restrição real de ordem (ex.: a API precisa existir antes da tela), inclusive entre stories de projetos diferentes; nunca ciclos.
+- Primeira quebra: tasks_replace_all com tudo de uma vez (tempIds para as dependências). Depois, mudanças incrementais: tasks_add, tasks_update_node, tasks_set_parent, tasks_reorder, tasks_add_dep/tasks_remove_dep, tasks_delete_node. Antes de mexer em algo existente, tasks_read de novo (o usuário também edita as tarefas).
+- Nós com ticket no Azure DevOps ([ticket #N] em tasks_read) não podem ser apagados por você: nunca tente apagá-los nem substituí-los; ao usar tasks_replace_all, reenvie-os com o "id". Se uma tool recusar por isso, explique ao usuário que ele decide pela aba Tarefas.
+- Ao terminar, resuma em poucas linhas (quantas stories/tasks, dependências principais, dúvidas em aberto) e indique que o usuário pode revisar e ajustar na aba Tarefas. Não repita o conteúdo inteiro no chat.
 
 Contexto atual da ideia:
 ${contextBlock(ctx)}`
