@@ -22,10 +22,12 @@ import { BOARD_CHANGED_EVENT } from './board/ops'
 
 // Excalidraw is heavy: load it only when a workspace opens.
 const Board = lazy(() => import('./Board'))
+const TasksTab = lazy(() => import('./tasks/TasksTab'))
 
 const api = window.api
 
-type Tab = 'board' | 'macro'
+type Tab = 'board' | 'macro' | 'tasks'
+type SavingTab = 'board' | 'macro' // tabs with autosave (Tarefas writes straight to the DB)
 
 interface Props {
   idea: Idea
@@ -36,18 +38,23 @@ interface Props {
 
 /**
  * Workspace of one idea: header (title, status, linked projects), tabs
- * (Board / Plano macro / Tarefas[Fase 4]) and the right-side chat slot
+ * (Board / Plano macro / Tarefas) and the right-side chat slot
  * (Fase 3). Both tabs stay mounted so Excalidraw keeps its undo history.
  */
 export function Workspace({ idea, projects, onBack, onOpenSettings }: Props): React.JSX.Element {
   const toast = useToast()
-  const [tab, setTab] = useState<Tab>(() => (readPref('ws.tab') === 'macro' ? 'macro' : 'board'))
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = readPref('ws.tab')
+    return t === 'macro' || t === 'tasks' ? t : 'board'
+  })
   const [chatOpen, setChatOpen] = useState(() => readPref('ws.chatOpen') === '1')
-  const [status, setStatus] = useState<Record<Tab, SaveStatus>>({ board: 'idle', macro: 'idle' })
+  const [status, setStatus] = useState<Record<SavingTab, SaveStatus>>({ board: 'idle', macro: 'idle' })
 
   const chat = useChat(idea.id)
   /** Claude changed the board while another tab was visible. */
   const [boardBadge, setBoardBadge] = useState(false)
+  /** The task graph changed (Claude's tools) while another tab was visible. */
+  const [tasksBadge, setTasksBadge] = useState(false)
 
   // Leaving the workspace ends the Claude process (history + session are kept).
   useEffect(() => () => void api.chat.close(idea.id), [idea.id])
@@ -63,11 +70,20 @@ export function Workspace({ idea, projects, onBack, onOpenSettings }: Props): Re
     if (tab === 'board') setBoardBadge(false)
   }, [tab, boardBadge])
 
+  useEffect(() => {
+    return api.onDataChanged((e) => {
+      if (e.entity === 'plan' && e.ideaId === idea.id) setTasksBadge(true)
+    })
+  }, [idea.id])
+  useEffect(() => {
+    if (tab === 'tasks') setTasksBadge(false)
+  }, [tab, tasksBadge])
+
   const primary = idea.projects.find((l) => l.isPrimary)
   const primaryProject = primary ? projects.find((p) => p.id === primary.projectId) : undefined
 
   const reportStatus =
-    (which: Tab) =>
+    (which: SavingTab) =>
     (s: SaveStatus, err?: unknown): void => {
       setStatus((cur) => (cur[which] === s ? cur : { ...cur, [which]: s }))
       if (s === 'error') {
@@ -144,11 +160,17 @@ export function Workspace({ idea, projects, onBack, onOpenSettings }: Props): Re
         >
           <IconDoc /> Plano macro
         </button>
-        <button role="tab" className="ws-tab" disabled title="Grafo de tarefas — chega na Fase 4">
-          <IconTasks /> Tarefas <span className="ws-soon">Fase 4</span>
+        <button
+          role="tab"
+          aria-selected={tab === 'tasks'}
+          className={`ws-tab${tab === 'tasks' ? ' active' : ''}`}
+          onClick={() => switchTab('tasks')}
+        >
+          <IconTasks /> Tarefas
+          {tasksBadge && tab !== 'tasks' && <span className="ws-tab-dot" title="As tarefas foram alteradas" />}
         </button>
         <span className="ws-tabs-spacer" />
-        <SaveIndicator status={status[tab]} onRetry={() => void flushAll()} />
+        {tab !== 'tasks' && <SaveIndicator status={status[tab]} onRetry={() => void flushAll()} />}
         <button
           className={`icon-btn ws-chat-toggle${chatOpen ? ' on' : ''}`}
           title={chatOpen ? 'Fechar painel do chat' : 'Abrir painel do chat'}
@@ -167,6 +189,16 @@ export function Workspace({ idea, projects, onBack, onOpenSettings }: Props): Re
           </section>
           <section className={`ws-pane${tab === 'macro' ? ' active' : ''}`} inert={tab !== 'macro'}>
             <MacroPlanTab ideaId={idea.id} active={tab === 'macro'} onStatus={onMacroStatus} />
+          </section>
+          <section className={`ws-pane${tab === 'tasks' ? ' active' : ''}`} inert={tab !== 'tasks'}>
+            <Suspense fallback={<div className="ws-placeholder">Carregando tarefas…</div>}>
+              <TasksTab
+                idea={idea}
+                projects={projects}
+                active={tab === 'tasks'}
+                onOpenChat={() => !chatOpen && toggleChat()}
+              />
+            </Suspense>
           </section>
         </div>
         {chatOpen ? (
