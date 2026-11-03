@@ -1,7 +1,9 @@
 import type Database from 'better-sqlite3'
 import type { NewProjectInput, Project, ProjectPatch } from '@shared/types'
 import { invalid, notFound } from '../errors'
+import { PlanError } from '@shared/plan'
 import { afterLinksChanged } from './ideaLinks'
+import { storiesUsingProject } from './plan'
 
 interface ProjectRow {
   id: number
@@ -69,12 +71,22 @@ export class ProjectsRepository {
   }
 
   /**
-   * Removes the project. Ideas are kept: only their links to this project go
+   * Removes the project (rejected with `project_in_use` while plan stories use it). Ideas are kept: only their links to this project go
    * away. Ideas that had it as primary get another linked project promoted;
    * ideas left without any project go back to "solta".
    */
   delete(id: number): void {
-    this.get(id)
+    const project = this.get(id)
+    const stories = storiesUsingProject(this.db, id)
+    if (stories.length > 0) {
+      throw new PlanError(
+        'project_in_use',
+        `Não dá para excluir o projeto "${project.name}": há stories de planos de tarefas que o usam (${stories
+          .slice(0, 5)
+          .map((x) => `"${x.title}" em "${x.ideaTitle}"`)
+          .join(', ')}${stories.length > 5 ? ` e mais ${stories.length - 5}` : ''}). Mude o projeto delas ou apague-as antes.`
+      )
+    }
     this.db.transaction(() => {
       const affected = this.db
         .prepare('SELECT idea_id FROM idea_projects WHERE project_id = ?')

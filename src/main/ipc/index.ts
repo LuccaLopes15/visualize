@@ -12,6 +12,7 @@ import { handle, toId } from './handle'
 import { hideCaptureWindow, resizeCaptureWindow } from '../windows/captureWindow'
 import { showMainWindow } from '../windows/mainWindow'
 import { resolveFlush } from '../flush'
+import type { PlanService } from '../plan/service'
 import type { ChatManager } from '../claude/manager'
 import { publicStatus } from '../claude/manager'
 import { ChatError } from '../claude/session'
@@ -24,6 +25,8 @@ export interface IpcDeps {
   hotkeyStatus: () => { hotkey: string; registered: boolean }
   setAutostart: (enabled: boolean) => void
   chat: ChatManager
+  /** Fase 4: plan graph service (emits `dataChanged` { entity: 'plan', ideaId } on mutations). */
+  plan: PlanService
 }
 
 /** Registers all IPC handlers. One block per namespace. */
@@ -139,6 +142,34 @@ export function registerIpc(deps: IpcDeps): void {
   )
   handle('macro:get', (ideaId) => repos.macroPlans.get(toId(ideaId, 'ideia')))
   handle('macro:save', (ideaId, markdown) => repos.macroPlans.save(toId(ideaId, 'ideia'), markdown))
+
+  // ---- plan:* (Fase 4) ---------------------------------------------------
+  const { plan } = deps
+  handle('plan:getGraph', (ideaId) => plan.getGraph(toId(ideaId, 'ideia')))
+  handle('plan:overview', (ideaId) => plan.overview(toId(ideaId, 'ideia')))
+  handle('plan:createNode', (ideaId, input) => plan.createNode(toId(ideaId, 'ideia'), input))
+  handle('plan:updateNode', (ideaId, nodeId, patch) =>
+    plan.updateNode(toId(ideaId, 'ideia'), nodeId, patch)
+  )
+  handle('plan:setParent', (ideaId, nodeId, parentId, index) =>
+    plan.setParent(toId(ideaId, 'ideia'), nodeId, parentId ?? null, index ?? undefined)
+  )
+  handle('plan:reorder', (ideaId, parentId, orderedIds) =>
+    plan.reorder(toId(ideaId, 'ideia'), parentId ?? null, orderedIds)
+  )
+  handle('plan:addDep', (ideaId, fromId, toNodeId) => plan.addDep(toId(ideaId, 'ideia'), fromId, toNodeId))
+  handle('plan:removeDep', (ideaId, fromId, toNodeId) =>
+    plan.removeDep(toId(ideaId, 'ideia'), fromId, toNodeId)
+  )
+  handle('plan:deleteNode', (ideaId, nodeId, force) =>
+    plan.deleteNode(toId(ideaId, 'ideia'), nodeId, force === true)
+  )
+  handle('plan:replaceAll', (ideaId, spec, force) =>
+    plan.replaceAll(toId(ideaId, 'ideia'), spec, { force: force === true })
+  )
+  handle('plan:mergeAdd', (ideaId, spec, parentId) =>
+    plan.mergeAdd(toId(ideaId, 'ideia'), spec, parentId ?? null)
+  )
 
   // ---- chat:* / claude:* (Fase 3) ----------------------------------------
   const { chat } = deps

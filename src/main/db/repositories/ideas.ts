@@ -8,7 +8,9 @@ import {
   type NewIdeaInput
 } from '@shared/types'
 import { invalid, notFound } from '../errors'
+import { PlanError } from '@shared/plan'
 import { afterLinksChanged } from './ideaLinks'
+import { storiesUsingProject } from './plan'
 
 interface IdeaRow {
   id: number
@@ -134,8 +136,22 @@ export class IdeasRepository {
     return this.get(ideaId)
   }
 
+  /**
+   * Unlinks a project. Rejected (`project_in_use`) while stories of the idea's
+   * plan still use it: moving or deleting them first is the user's call.
+   */
   unlinkProject(ideaId: number, projectId: number): Idea {
     this.get(ideaId)
+    const stories = storiesUsingProject(this.db, projectId, ideaId)
+    if (stories.length > 0) {
+      const name = (this.db.prepare('SELECT name FROM projects WHERE id = ?').get(projectId) as { name: string } | undefined)?.name
+      throw new PlanError(
+        'project_in_use',
+        `Não dá para desvincular o projeto "${name ?? `#${projectId}`}": ${stories.length === 1 ? 'a story' : 'as stories'} ${stories
+          .map((x) => `"${x.title}"`)
+          .join(', ')} do plano de tarefas ${stories.length === 1 ? 'usa' : 'usam'} esse projeto. Mude o projeto ${stories.length === 1 ? 'dela' : 'delas'} ou apague-${stories.length === 1 ? 'a' : 'as'} antes.`
+      )
+    }
     this.db.transaction(() => {
       this.db
         .prepare('DELETE FROM idea_projects WHERE idea_id = ? AND project_id = ?')

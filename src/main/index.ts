@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { join } from 'node:path'
 import { createRepositories, type Repositories } from './db'
+import { notifyPlanChanged } from './events'
+import { PlanService } from './plan/service'
 import { registerIpc } from './ipc'
 import { HotkeyManager, formatAccelerator } from './hotkey'
 import { applyAutostart, launchedHidden } from './autostart'
@@ -115,8 +117,12 @@ async function bootstrap(): Promise<void> {
     }
   })
 
+  // Fase 4: plan graph service, shared by IPC handlers and (Tarefa 3) the MCP tools.
+  const plan = new PlanService(repos.plan, notifyPlanChanged)
+
   registerIpc({
     chat,
+    plan,
     repos,
     dbPath,
     hotkeyStatus: () => hotkeys.status(),

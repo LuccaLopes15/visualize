@@ -69,3 +69,6 @@ resources/           ícones (app e bandeja)
   Só leitura no código (`--tools Read,Glob,Grep`, `--permission-mode dontAsk`) + tools `mcp__visualize__*`;
   `--setting-sources project` e `--strict-mcp-config`. Detalhes e armadilhas (variáveis `CLAUDE_CODE_*` herdadas)
   em `docs/spike-fase3.md`. Caminho do executável e modelo ficam em Configurações (`claude_path`, `claude_model`).
+- **Plano de tarefas (Fase 4, camada de dados)**: stories/tasks/dependências em `plan_nodes`/`plan_deps` (migration v4),
+  regras em `src/main/db/repositories/plan.ts` + `src/shared/plan.ts` (helpers puros), `PlanService` em `src/main/plan/`
+  e canais `plan:*`. Contrato completo (tipos, semântica de `replaceAll`/`mergeAdd`, erros, eventos): `docs/fase4-contract.md`.

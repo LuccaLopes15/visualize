@@ -4,6 +4,7 @@ import { BoardsRepository } from './repositories/boards'
 import { ChatRepository } from './repositories/chat'
 import { IdeasRepository } from './repositories/ideas'
 import { MacroPlansRepository } from './repositories/macroPlans'
+import { PlanRepository } from './repositories/plan'
 import { ProjectsRepository } from './repositories/projects'
 import { SettingsRepository } from './repositories/settings'
 
@@ -15,6 +16,7 @@ export interface Repositories {
   boards: BoardsRepository
   macroPlans: MacroPlansRepository
   chat: ChatRepository
+  plan: PlanRepository
 }
 
 export function createRepositories(filename: string, now: () => number = Date.now): Repositories {
@@ -26,7 +28,8 @@ export function createRepositories(filename: string, now: () => number = Date.no
     settings: new SettingsRepository(db),
     boards: new BoardsRepository(db, now),
     macroPlans: new MacroPlansRepository(db, now),
-    chat: new ChatRepository(db, now)
+    chat: new ChatRepository(db, now),
+    plan: new PlanRepository(db, now)
   }
 }
 

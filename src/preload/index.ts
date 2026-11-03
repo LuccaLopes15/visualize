@@ -68,6 +68,19 @@ const api: VisualizeApi = {
     save: (...a) => invoke('macro:save', ...a),
     onUpdated: (cb) => subscribe<MacroUpdatedEvent>(IpcEvents.macroUpdated, cb)
   },
+  plan: {
+    getGraph: (...a) => invoke('plan:getGraph', ...a),
+    overview: (...a) => invoke('plan:overview', ...a),
+    createNode: (...a) => invoke('plan:createNode', ...a),
+    updateNode: (...a) => invoke('plan:updateNode', ...a),
+    setParent: (...a) => invoke('plan:setParent', ...a),
+    reorder: (...a) => invoke('plan:reorder', ...a),
+    addDep: (...a) => invoke('plan:addDep', ...a),
+    removeDep: (...a) => invoke('plan:removeDep', ...a),
+    deleteNode: (...a) => invoke('plan:deleteNode', ...a),
+    replaceAll: (...a) => invoke('plan:replaceAll', ...a),
+    mergeAdd: (...a) => invoke('plan:mergeAdd', ...a)
+  },
   chat: {
     open: (...a) => invoke('chat:open', ...a),
     send: (...a) => invoke('chat:send', ...a),

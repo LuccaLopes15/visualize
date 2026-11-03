@@ -51,6 +51,19 @@ export interface VisualizeApi {
     /** Claude changed the plano macro of some idea. */
     onUpdated: (cb: (e: MacroUpdatedEvent) => void) => Unsubscribe
   }
+  plan: {
+    getGraph: Invoke<'plan:getGraph'>
+    overview: Invoke<'plan:overview'>
+    createNode: Invoke<'plan:createNode'>
+    updateNode: Invoke<'plan:updateNode'>
+    setParent: Invoke<'plan:setParent'>
+    reorder: Invoke<'plan:reorder'>
+    addDep: Invoke<'plan:addDep'>
+    removeDep: Invoke<'plan:removeDep'>
+    deleteNode: Invoke<'plan:deleteNode'>
+    replaceAll: Invoke<'plan:replaceAll'>
+    mergeAdd: Invoke<'plan:mergeAdd'>
+  }
   chat: {
     open: Invoke<'chat:open'>
     send: Invoke<'chat:send'>
@@ -76,6 +89,6 @@ export interface VisualizeApi {
     /** Main wants pending autosaves flushed; reply with `flushDone(token)`. */
     onFlushRequest: (cb: (token: string) => void) => Unsubscribe
   }
-  /** Fires whenever main changes data; the renderer refetches that entity. */
+  /** Fires whenever main changes data; the renderer refetches that entity (`plan` events carry `ideaId`). */
   onDataChanged: (cb: (e: DataChangedEvent) => void) => Unsubscribe
 }

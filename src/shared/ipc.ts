@@ -2,7 +2,7 @@
 // domain (`ideas:*`, `projects:*`, `settings:*`, `capture:*`, `app:*`).
 // Main registers handlers with `handle()` (src/main/ipc/handle.ts) and preload
 // exposes them with `invoke()`, both typed from this single map.
-// Later phases add their namespaces here (`plan:*`, `devops:*`, ...).
+// Later phases add their namespaces here (`devops:*`, ...).
 
 import type {
   AppInfo,
@@ -14,7 +14,17 @@ import type {
   IdeaPatch,
   MacroPlan,
   NewIdeaInput,
+  NewPlanNodeInput,
   NewProjectInput,
+  PlanAddSpec,
+  PlanDeleteResult,
+  PlanDep,
+  PlanGraph,
+  PlanNode,
+  PlanNodePatch,
+  PlanOverview,
+  PlanSpec,
+  PlanWriteResult,
   Project,
   ProjectPatch,
   SaveResult
@@ -74,6 +84,24 @@ export interface IpcContract {
   'claude:setPath': (path: string) => ClaudeStatus
   'claude:setModel': (model: string) => ClaudeSettings
   'claude:pickPath': () => string | null
+
+  // ---- Fase 4: plano de tarefas (grafo). Mutations emit `events:dataChanged` { entity: 'plan', ideaId }.
+  // Rule violations reject with a pt-BR message (see PlanErrorCode in shared/plan.ts).
+  'plan:getGraph': (ideaId: number) => PlanGraph
+  /** Graph + linked projects of the idea. */
+  'plan:overview': (ideaId: number) => PlanOverview
+  'plan:createNode': (ideaId: number, input: NewPlanNodeInput) => PlanNode
+  'plan:updateNode': (ideaId: number, nodeId: string, patch: PlanNodePatch) => PlanNode
+  /** parentId null is only valid for stories (reorder among stories). */
+  'plan:setParent': (ideaId: number, nodeId: string, parentId: string | null, index?: number) => PlanNode
+  'plan:reorder': (ideaId: number, parentId: string | null, orderedIds: string[]) => void
+  'plan:addDep': (ideaId: number, fromId: string, toId: string) => PlanDep
+  /** Resolves false when the dependency did not exist. */
+  'plan:removeDep': (ideaId: number, fromId: string, toId: string) => boolean
+  /** `force` confirms deleting nodes that already have a DevOps ticket. */
+  'plan:deleteNode': (ideaId: number, nodeId: string, force?: boolean) => PlanDeleteResult
+  'plan:replaceAll': (ideaId: number, spec: PlanSpec, force?: boolean) => PlanWriteResult
+  'plan:mergeAdd': (ideaId: number, spec: PlanAddSpec, parentId?: string | null) => PlanWriteResult
 
   'app:info': () => AppInfo
   'app:openHub': () => void

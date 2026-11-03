@@ -102,6 +102,48 @@ export const migrations: Migration[] = [
       );
       CREATE INDEX idx_chat_messages_idea ON chat_messages (idea_id, id);
     `
+  },
+  {
+    version: 4,
+    name: 'fase4_plan_graph',
+    up: `
+      -- Task graph of an idea: stories (roots) and tasks (any depth below).
+      -- Tasks store project_id NULL: their project is derived from the root story
+      -- (so moving a task or changing a story's project never needs a sync).
+      -- project_id is RESTRICT: a project with stories cannot be deleted (the app
+      -- checks first and shows a friendly message).
+      CREATE TABLE plan_nodes (
+        id               TEXT    PRIMARY KEY,
+        idea_id          INTEGER NOT NULL REFERENCES ideas (id) ON DELETE CASCADE,
+        kind             TEXT    NOT NULL CHECK (kind IN ('story', 'task')),
+        title            TEXT    NOT NULL,
+        description      TEXT    NOT NULL DEFAULT '',
+        parent_id        TEXT    REFERENCES plan_nodes (id) ON DELETE CASCADE,
+        project_id       INTEGER REFERENCES projects (id) ON DELETE RESTRICT,
+        sort             INTEGER NOT NULL DEFAULT 0,
+        devops_id        INTEGER,
+        devops_url       TEXT,
+        devops_synced_at INTEGER,
+        created_at       INTEGER NOT NULL,
+        updated_at       INTEGER NOT NULL,
+        CHECK (
+          (kind = 'story' AND parent_id IS NULL     AND project_id IS NOT NULL) OR
+          (kind = 'task'  AND parent_id IS NOT NULL AND project_id IS NULL)
+        )
+      );
+      CREATE INDEX idx_plan_nodes_idea    ON plan_nodes (idea_id);
+      CREATE INDEX idx_plan_nodes_parent  ON plan_nodes (parent_id);
+      CREATE INDEX idx_plan_nodes_project ON plan_nodes (project_id);
+
+      -- "from_id depende de to_id". Same-idea / acyclic rules are enforced by the repository.
+      CREATE TABLE plan_deps (
+        from_id TEXT NOT NULL REFERENCES plan_nodes (id) ON DELETE CASCADE,
+        to_id   TEXT NOT NULL REFERENCES plan_nodes (id) ON DELETE CASCADE,
+        PRIMARY KEY (from_id, to_id),
+        CHECK (from_id <> to_id)
+      );
+      CREATE INDEX idx_plan_deps_to ON plan_deps (to_id);
+    `
   }
 ]
 
