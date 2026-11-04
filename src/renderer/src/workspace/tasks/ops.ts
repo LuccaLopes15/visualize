@@ -10,18 +10,23 @@ export function siblingsOf(nodes: readonly PlanNode[], node: Pick<PlanNode, 'par
 }
 
 /**
- * New complete sibling order after moving `id` one slot (-1 = before, +1 =
- * after), or null when it is already at that end. Feed it to `plan.reorder`.
+ * New position (0-based among its siblings) after moving `id` one slot (-1 = before, +1 = after), or
+ * null when it is already at that end. Feed it to `plan.updateNode(id, { sort })`: one atomic
+ * server-side move instead of sending a (possibly stale) full sibling list.
  */
-export function moveSibling(nodes: readonly PlanNode[], id: string, delta: -1 | 1): string[] | null {
+export function moveTarget(nodes: readonly PlanNode[], id: string, delta: -1 | 1): number | null {
   const node = nodes.find((n) => n.id === id)
   if (!node) return null
-  const ids = siblingsOf(nodes, node).map((n) => n.id)
-  const i = ids.indexOf(id)
+  const siblings = siblingsOf(nodes, node)
+  const i = siblings.findIndex((n) => n.id === id)
   const j = i + delta
-  if (i < 0 || j < 0 || j >= ids.length) return null
-  ;[ids[i], ids[j]] = [ids[j], ids[i]]
-  return ids
+  if (i < 0 || j < 0 || j >= siblings.length) return null
+  return j
+}
+
+/** The node was deleted (by Claude / another window) while a pending edit was still being written. */
+export function isNotFoundError(err: unknown): boolean {
+  return err instanceof Error && /não encontrad/i.test(err.message)
 }
 
 /** Ancestors of `id`, nearest first (parent, grandparent, ... story). */

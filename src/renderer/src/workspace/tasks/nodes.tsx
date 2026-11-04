@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Handle, NodeToolbar, Position, type Node, type NodeProps } from '@xyflow/react'
 import type { PlanNode } from '@shared/types'
+import { PLAN_TITLE_MAX } from '@shared/types'
 import { IconPlus, IconTrash, IconEdit } from '../../components/Icons'
 import { useTasksActions } from './context'
 import { IconChevron } from './icons'
@@ -76,7 +77,7 @@ function Title({ node, className }: { node: PlanNode; className: string }): Reac
       className={`${className} tk-title-input nodrag nowheel nopan`}
       defaultValue={node.title}
       rows={2}
-      maxLength={255}
+      maxLength={PLAN_TITLE_MAX}
       aria-label="Título"
       onBlur={() => finish(true)}
       onKeyDown={(e) => {

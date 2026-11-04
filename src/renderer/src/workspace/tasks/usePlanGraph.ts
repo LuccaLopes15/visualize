@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PlanGraph } from '@shared/types'
 import { useToast } from '../../components/Toasts'
+import { isNotFoundError } from './ops'
 
 const api = window.api
 
@@ -12,9 +13,10 @@ export interface PlanGraphState {
   /**
    * Runs a mutation. A rejection (PlanError message, already in pt-BR) becomes
    * a toast; the graph is ALWAYS refetched afterwards so the UI never keeps
-   * stale state. Resolves to the result, or undefined when it failed.
+   * stale state. Resolves to the result, or undefined when it failed. `quietNotFound`: a rejection because
+   * the node no longer exists (deleted meanwhile) is swallowed silently (late autosave of a draft).
    */
-  mutate: <T>(fn: () => Promise<T>) => Promise<T | undefined>
+  mutate: <T>(fn: () => Promise<T>, opts?: { quietNotFound?: boolean }) => Promise<T | undefined>
 }
 
 /** Plan graph of an idea, kept fresh: refetches on `events:dataChanged` (entity 'plan', same idea). */
@@ -52,11 +54,11 @@ export function usePlanGraph(ideaId: number): PlanGraphState {
   }, [ideaId, refetch])
 
   const mutate = useCallback(
-    async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+    async <T,>(fn: () => Promise<T>, opts?: { quietNotFound?: boolean }): Promise<T | undefined> => {
       try {
         return await fn()
       } catch (err) {
-        toastRef.current.error(err)
+        if (!(opts?.quietNotFound && isNotFoundError(err))) toastRef.current.error(err)
         return undefined
       } finally {
         void refetch()

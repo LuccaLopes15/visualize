@@ -7,11 +7,12 @@ import { continueList, type Edit } from '../../lib/mdEditing'
 import { projectColor } from './colors'
 import { IconDown, IconUp } from './icons'
 import { depCandidates, parentOptions, siblingsOf } from './ops'
-import { useDraft } from './useDraft'
+import { useDraft, type Draft } from './useDraft'
 
 export interface PanelActions {
-  rename: (id: string, title: string) => void
-  setDescription: (id: string, description: string) => void
+  /** Resolve when the write finished (drafts await it on flush). */
+  rename: (id: string, title: string) => Promise<void>
+  setDescription: (id: string, description: string) => Promise<void>
   setProject: (id: string, projectId: number) => void
   setParent: (id: string, parentId: string) => void
   move: (id: string, delta: -1 | 1) => void
@@ -74,29 +75,32 @@ function PanelBody({ graph, node, linked, projectName, dir, actions }: Props): R
   const title = useDraft(node.title, (v) => {
     const t = v.trim()
     if (!t) title.reset()
-    else actions.rename(node.id, t)
+    else return actions.rename(node.id, t)
   })
 
   return (
     <div className="tk-panel-body">
-      <label className="tk-field">
-        <span className="tk-label">Título</span>
-        <input
-          className="input"
-          value={title.draft}
-          maxLength={PLAN_TITLE_MAX}
-          onChange={(e) => title.change(e.target.value)}
-          onBlur={title.flush}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur()
-            if (e.key === 'Escape') {
-              e.stopPropagation()
-              title.reset()
-              e.currentTarget.blur()
-            }
-          }}
-        />
-      </label>
+      <div className="tk-field">
+        <label className="tk-field">
+          <span className="tk-label">Título</span>
+          <input
+            className="input"
+            value={title.draft}
+            maxLength={PLAN_TITLE_MAX}
+            onChange={(e) => title.change(e.target.value)}
+            onBlur={() => void title.flush()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') {
+                e.stopPropagation()
+                title.reset()
+                e.currentTarget.blur()
+              }
+            }}
+          />
+        </label>
+        <DraftConflict draft={title} />
+      </div>
 
       <DescriptionField node={node} onCommit={(v) => actions.setDescription(node.id, v)} />
 
@@ -292,7 +296,31 @@ function NodeSelect({
   )
 }
 
-function DescriptionField({ node, onCommit }: { node: PlanNode; onCommit: (v: string) => void }): React.JSX.Element {
+/** Shown when the stored value changed (Claude's tasks_update_node) while the user had unsent edits. */
+function DraftConflict({ draft }: { draft: Draft }): React.JSX.Element | null {
+  if (draft.conflict === null) return null
+  return (
+    <div className="tk-conflict" role="alert">
+      <span>Atualizado pelo Claude enquanto você editava.</span>
+      <div className="tk-btn-row">
+        <button className="btn" onClick={draft.acceptRemote}>
+          Usar a versão do Claude
+        </button>
+        <button className="btn" onClick={draft.keepMine}>
+          Manter a minha
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function DescriptionField({
+  node,
+  onCommit
+}: {
+  node: PlanNode
+  onCommit: (v: string) => Promise<void>
+}): React.JSX.Element {
   const [preview, setPreview] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
   const d = useDraft(node.description, onCommit, 900)
@@ -319,7 +347,7 @@ function DescriptionField({ node, onCommit }: { node: PlanNode; onCommit: (v: st
             aria-selected={preview}
             className={preview ? 'on' : ''}
             onClick={() => {
-              d.flush()
+              void d.flush()
               setPreview(true)
             }}
           >
@@ -327,6 +355,7 @@ function DescriptionField({ node, onCommit }: { node: PlanNode; onCommit: (v: st
           </button>
         </div>
       </div>
+      <DraftConflict draft={d} />
       {preview ? (
         d.draft.trim() ? (
           <article className="markdown tk-md-preview" dangerouslySetInnerHTML={{ __html: html }} />
@@ -342,7 +371,7 @@ function DescriptionField({ node, onCommit }: { node: PlanNode; onCommit: (v: st
           spellCheck
           placeholder={'Descreva o que precisa ser feito (Markdown).\n\n- critérios de aceite\n- observações'}
           onChange={(e) => d.change(e.target.value)}
-          onBlur={d.flush}
+          onBlur={() => void d.flush()}
           onKeyDown={(e) => {
             e.stopPropagation()
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {

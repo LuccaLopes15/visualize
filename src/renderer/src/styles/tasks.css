@@ -122,17 +122,26 @@
 }
 
 .tk-hint-pill {
-  margin-top: 10px !important;
-  padding: 5px 12px;
+  /* bottom-left, right of the zoom controls (which are ~26px wide + 15px margin) */
+  margin: 0 0 15px 58px !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 12px;
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--muted);
   font-size: 11.5px;
+  line-height: 1.35;
   box-shadow: var(--shadow);
-  max-width: calc(100% - 40px);
-  text-align: center;
-  pointer-events: none;
+  /* leave room for the minimap (150px + margins) on the right */
+  max-width: min(520px, calc(100% - 58px - 190px));
+}
+.tk-hint-pill .icon-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
 }
 .tk-hint-pill kbd {
   margin-right: 2px;
@@ -623,4 +632,15 @@ button.tk-count:hover {
 }
 .tk-warn {
   color: var(--warn);
+}
+.tk-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+  color: var(--text);
+  font-size: 12px;
 }

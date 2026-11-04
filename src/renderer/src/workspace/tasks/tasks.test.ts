@@ -5,7 +5,7 @@ import { PROJECT_PALETTE, projectColor } from './colors'
 import { diffNewIds } from './diff'
 import { buildFlow, depHandles, FIT_VIEW, pruneIds, visibleNodes } from './flow'
 import { layoutPlan, LANE_GAP, nodeSize, type Rect } from './layout'
-import { checkConnection, deleteImpact, depCandidates, descriptionPreview, moveSibling, parentOptions } from './ops'
+import { checkConnection, deleteImpact, depCandidates, descriptionPreview, moveTarget, parentOptions } from './ops'
 
 let seq = 0
 function raw(
@@ -253,14 +253,14 @@ describe('diffNewIds', () => {
 })
 
 describe('ops', () => {
-  it('moveSibling swaps with the neighbour and refuses at the ends', () => {
+  it('moveTarget gives the new index among siblings and refuses at the ends', () => {
     const g = sketch()
-    expect(moveSibling(g.nodes, 'T2', -1)).toEqual(['T2', 'T1', 'T3'])
-    expect(moveSibling(g.nodes, 'T2', 1)).toEqual(['T1', 'T3', 'T2'])
-    expect(moveSibling(g.nodes, 'T1', -1)).toBeNull()
-    expect(moveSibling(g.nodes, 'T3', 1)).toBeNull()
-    expect(moveSibling(g.nodes, 'S2', -1)).toEqual(['S2', 'S1']) // stories reorder among themselves
-    expect(moveSibling(g.nodes, 'nope', 1)).toBeNull()
+    expect(moveTarget(g.nodes, 'T2', -1)).toBe(0)
+    expect(moveTarget(g.nodes, 'T2', 1)).toBe(2)
+    expect(moveTarget(g.nodes, 'T1', -1)).toBeNull()
+    expect(moveTarget(g.nodes, 'T3', 1)).toBeNull()
+    expect(moveTarget(g.nodes, 'S2', -1)).toBe(0) // stories reorder among themselves
+    expect(moveTarget(g.nodes, 'nope', 1)).toBeNull()
   })
 
   it('parentOptions excludes the node and its descendants', () => {

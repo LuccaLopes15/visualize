@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -21,6 +21,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import '../../styles/tasks.css'
 import type { Idea, Project } from '@shared/types'
+import { IconX } from '../../components/Icons'
 import { ConfirmDialog } from '../../components/Modal'
 import { useToast } from '../../components/Toasts'
 import { readPref, writePref } from '../../lib/prefs'
@@ -28,6 +29,7 @@ import { projectColor } from './colors'
 import { TasksActionsContext, type TasksActions } from './context'
 import { diffNewIds } from './diff'
 import { DepEdge } from './edges'
+import { shouldFitAfterLayout, shouldFitAfterResize, type Viewport } from './fit'
 import { buildFlow, FIT_VIEW, pruneIds } from './flow'
 import { IconDir, IconRelayout } from './icons'
 import { type LayoutDir } from './layout'
@@ -36,7 +38,7 @@ import {
   ancestorsOf,
   checkConnection,
   deleteImpact,
-  moveSibling,
+  moveTarget,
   type ConnectMode
 } from './ops'
 import { SidePanel, type PanelActions } from './SidePanel'
@@ -48,8 +50,9 @@ const api = window.api
 const ACCENT = '#8b6cff'
 const nodeTypes = { story: StoryNode, task: TaskNode, lane: LaneNode }
 const edgeTypes = { dep: DepEdge }
-const FIT = FIT_VIEW
 const HIGHLIGHT_MS = 2600
+/** The side panel opening/closing resizes the canvas too: that is not a reason to refit. */
+const PANEL_RESIZE_GRACE_MS = 800
 
 interface Props {
   idea: Idea
@@ -83,6 +86,7 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
   const [relayout, setRelayout] = useState(0)
   const [connecting, setConnecting] = useState<ConnectMode | null>(null)
   const [pendingTick, setPendingTick] = useState(0)
+  const [hintDismissed, setHintDismissed] = useState(() => readPref('tasks.hintDismissed') === '1')
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
@@ -93,6 +97,11 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
   const layoutKeyRef = useRef('')
   const relayoutRef = useRef(0)
   const lastCount = useRef(0)
+  const graphRef = useRef(graph)
+  graphRef.current = graph
+  const totalRef = useRef(0)
+  const lastFit = useRef<Viewport | null>(null)
+  const resizeGraceUntil = useRef(0)
   const fitTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const altHeld = useRef(false)
 
@@ -155,21 +164,50 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
     [rf, isInView]
   )
 
+  /** Expands the collapsed ancestors of `id` (and `id` itself with `includeSelf`) so it is visible. */
+  const expandAncestors = useCallback(
+    (id: string, includeSelf = false): void => {
+      if (!graph) return
+      const path = ancestorsOf(graph.nodes, id).map((a) => a.id)
+      if (includeSelf) path.push(id)
+      setCollapsed((c) => {
+        if (!path.some((a) => c.has(a))) return c
+        const next = new Set(c)
+        for (const a of path) next.delete(a)
+        return next
+      })
+    },
+    [graph]
+  )
+
+  /** Fits the whole graph and remembers the resulting viewport (to tell later whether the user moved it). */
+  const autoFit = useCallback((): void => {
+    clearTimeout(fitTimer.current)
+    fitTimer.current = setTimeout(() => {
+      void rf.fitView(FIT_VIEW).then(() => {
+        lastFit.current = rf.getViewport()
+      })
+    }, 80)
+  }, [rf])
+
   // A node this UI just created: once it is in the graph, select it and start renaming.
   useEffect(() => {
     const p = pending.current
     if (!p || !graph || !graph.nodes.some((n) => n.id === p.id)) return
     pending.current = null
+    expandAncestors(p.id) // the graph now contains the node, so its ancestors are known
     setSelectedId(p.id)
     setSelectedEdge(null)
     if (p.edit) setEditingId(p.id)
     reveal(p.id)
-  }, [graph, pendingTick, reveal])
+  }, [graph, pendingTick, reveal, expandAncestors])
 
   // ---- React Flow nodes/edges from the model -------------------------------------
   useEffect(() => {
     if (!model) return
-    const sameLayout = layoutKeyRef.current === model.layoutKey && relayoutRef.current === relayout
+    const layoutChanged = layoutKeyRef.current !== model.layoutKey
+    const relayoutChanged = relayoutRef.current !== relayout
+    const sameLayout = !layoutChanged && !relayoutChanged
     const firstLayout = layoutKeyRef.current === ''
     layoutKeyRef.current = model.layoutKey
     relayoutRef.current = relayout
@@ -180,7 +218,6 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
       // Every node has a fixed, known size. Handing it over as `measured` keeps
       // `nodesInitialized` true even though these nodes are rebuilt on each change
       // (otherwise fitView waits forever for measurements that never re-arrive).
-      void cur
       const lanes: Node[] = model.lanes.map((l) => {
         const c = projectColor(l.projectId)
         const data: LaneData = { label: projectName(l.projectId), color: c.color, soft: c.soft, line: c.line }
@@ -253,48 +290,66 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
               focusable: false,
               selected: e.id === selectedEdge,
               markerEnd: { type: MarkerType.ArrowClosed, color: ACCENT, width: 16, height: 16 },
-              data: { aggregated: e.aggregated }
+              data: { aggregated: e.aggregated, route: e.route }
             }
       )
     )
 
-    // Refit on first load, after "Reorganizar"/direction changes and on big changes
-    // (e.g. Claude generating the whole breakdown); otherwise keep the viewport.
-    const count = model.nodes.length
-    const big = !sameLayout && (firstLayout || lastCount.current === 0 || Math.abs(count - lastCount.current) >= 3)
-    const forced = relayoutRef.current !== 0 && !sameLayout
-    lastCount.current = count
-    if (count > 0 && (big || forced)) {
-      clearTimeout(fitTimer.current)
-      fitTimer.current = setTimeout(() => void rf.fitView(FIT), 80)
-    }
-  }, [model, relayout, selectedId, selectedEdge, highlight, projectName, setNodes, setEdges, rf])
+    // Refit on first load, after "Reorganizar"/direction changes and on big structural changes
+    // (e.g. Claude generating the whole breakdown); ordinary edits and collapsing keep the viewport.
+    const fit = shouldFitAfterLayout({
+      firstLayout,
+      layoutChanged,
+      relayoutChanged,
+      total: model.total,
+      prevTotal: lastCount.current
+    })
+    lastCount.current = model.total
+    totalRef.current = model.total
+    if (fit) autoFit()
+  }, [model, relayout, selectedId, selectedEdge, highlight, projectName, setNodes, setEdges, autoFit])
   useEffect(() => () => clearTimeout(fitTimer.current), [])
 
-  // ---- actions ---------------------------------------------------------------------
-  const expandAncestors = useCallback(
-    (id: string): void => {
-      if (!graph) return
-      const anc = ancestorsOf(graph.nodes, id).map((a) => a.id)
-      setCollapsed((c) => {
-        if (!anc.some((a) => c.has(a))) return c
-        const next = new Set(c)
-        for (const a of anc) next.delete(a)
-        return next
-      })
-    },
-    [graph]
-  )
+  // The canvas shrinks/grows when the chat opens or the window is resized: refit, but only while the
+  // user has not panned/zoomed since the last automatic fit (never fight them).
+  const panelOpen = selectedNode !== null
+  useLayoutEffect(() => {
+    resizeGraceUntil.current = Date.now() + PANEL_RESIZE_GRACE_MS
+  }, [panelOpen])
+  const hasGraph = graph !== null
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let size = { w: el.clientWidth, h: el.clientHeight }
+    const ro = new ResizeObserver(() => {
+      const next = { w: el.clientWidth, h: el.clientHeight }
+      if (next.w === size.w && next.h === size.h) return
+      size = next
+      if (next.w === 0 || next.h === 0) return // tab hidden
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (Date.now() < resizeGraceUntil.current) return
+        if (shouldFitAfterResize(lastFit.current, rf.getViewport(), totalRef.current)) autoFit()
+      }, 160)
+    })
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      clearTimeout(timer)
+    }
+  }, [hasGraph, rf, autoFit])
 
+  // ---- actions ---------------------------------------------------------------------
   const createNode = useCallback(
     async (input: Parameters<typeof api.plan.createNode>[1]): Promise<void> => {
       const created = await mutate(() => api.plan.createNode(idea.id, input))
       if (!created) return
-      if (input.parentId) expandAncestors(created.id)
+      // Ancestors are expanded by the pending-node effect, once the refetched graph contains the node.
       pending.current = { id: created.id, edit: true }
       setPendingTick((t) => t + 1)
     },
-    [idea.id, mutate, expandAncestors]
+    [idea.id, mutate]
   )
   const addStory = useCallback(
     (projectId: number) => void createNode({ kind: 'story', title: 'Nova história', projectId }),
@@ -302,18 +357,16 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
   )
   const addChild = useCallback(
     (parentId: string) => {
-      setCollapsed((c) => {
-        if (!c.has(parentId)) return c
-        const next = new Set(c)
-        next.delete(parentId)
-        return next
-      })
+      expandAncestors(parentId, true) // show the parent (and its path) right away
       void createNode({ kind: 'task', title: 'Nova tarefa', parentId })
     },
-    [createNode]
+    [createNode, expandAncestors]
   )
   const rename = useCallback(
-    (id: string, title: string) => void mutate(() => api.plan.updateNode(idea.id, id, { title })),
+    async (id: string, title: string): Promise<void> => {
+      if (!graphRef.current?.nodes.some((n) => n.id === id)) return // deleted meanwhile (late draft flush)
+      await mutate(() => api.plan.updateNode(idea.id, id, { title }), { quietNotFound: true })
+    },
     [idea.id, mutate]
   )
   const requestDelete = useCallback((id: string) => setConfirmId(id), [])
@@ -357,17 +410,20 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
 
   const panelActions: PanelActions = {
     rename,
-    setDescription: (id, description) => void mutate(() => api.plan.updateNode(idea.id, id, { description })),
+    // Late autosave of a draft: if the node vanished meanwhile there is nothing to write (and nothing to toast).
+    setDescription: async (id, description) => {
+      if (!graphRef.current?.nodes.some((n) => n.id === id)) return
+      await mutate(() => api.plan.updateNode(idea.id, id, { description }), { quietNotFound: true })
+    },
     setProject: (id, projectId) => void mutate(() => api.plan.updateNode(idea.id, id, { projectId })),
     setParent: (id, parentId) => {
-      expandAncestors(parentId)
+      expandAncestors(parentId, true)
       void mutate(() => api.plan.setParent(idea.id, id, parentId))
     },
+    // Atomic server-side move (placeAt clamps/renumbers): no full sibling list that could be stale.
     move: (id, delta) => {
-      if (!graph) return
-      const order = moveSibling(graph.nodes, id, delta)
-      const node = graph.nodes.find((n) => n.id === id)
-      if (order && node) void mutate(() => api.plan.reorder(idea.id, node.parentId, order))
+      const index = graph ? moveTarget(graph.nodes, id, delta) : null
+      if (index !== null) void mutate(() => api.plan.updateNode(idea.id, id, { sort: index }))
     },
     addDep: (fromId, toId) => void mutate(() => api.plan.addDep(idea.id, fromId, toId)),
     removeDep: (fromId, toId) => void mutate(() => api.plan.removeDep(idea.id, fromId, toId)),
@@ -422,7 +478,7 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
     if (m === 'dep') {
       void mutate(() => api.plan.addDep(idea.id, source, target))
     } else {
-      expandAncestors(source)
+      expandAncestors(source, true) // the new parent may itself be collapsed
       void mutate(() => api.plan.setParent(idea.id, target, source))
     }
   }
@@ -511,7 +567,6 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
     else {
       const parents = new Set(graph.nodes.filter((n) => n.parentId !== null).map((n) => n.parentId as string))
       setCollapsed(parents)
-      setSelectedId((id) => id)
     }
   }
 
@@ -597,7 +652,7 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
               proOptions={{ hideAttribution: false }}
             >
               <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#2a3040" />
-              <Controls showInteractive={false} position="bottom-left" fitViewOptions={FIT} />
+              <Controls showInteractive={false} position="bottom-left" fitViewOptions={FIT_VIEW} />
               {!empty && <MiniMap
                 pannable
                 zoomable
@@ -607,13 +662,27 @@ function TasksInner({ idea, projects, active, onOpenChat }: Props): React.JSX.El
                 nodeColor={(n) => (n.type === 'lane' ? 'transparent' : ((n.data as PlanNodeData).color ?? '#888'))}
                 nodeStrokeWidth={0}
               />}
-              {!empty && (
-                <Panel position="top-center" className="tk-hint-pill">
-                  {hintMode === 'dep'
-                    ? 'Arraste da borda de um cartão até outro: o primeiro passa a depender do segundo'
-                    : 'Arraste da borda de um cartão até outro: o segundo passa a ser filho do primeiro'}
-                  {' · '}
-                  <kbd>Alt</kbd> inverte o modo
+              {!empty && !hintDismissed && (
+                // Bottom-left, next to the zoom controls: never on top of the graph's first row.
+                <Panel position="bottom-left" className="tk-hint-pill">
+                  <span>
+                    {hintMode === 'dep'
+                      ? 'Arraste da borda de um cartão até outro: o primeiro passa a depender do segundo'
+                      : 'Arraste da borda de um cartão até outro: o segundo passa a ser filho do primeiro'}
+                    {' · '}
+                    <kbd>Alt</kbd> inverte o modo
+                  </span>
+                  <button
+                    className="icon-btn"
+                    title="Ocultar esta dica"
+                    aria-label="Ocultar a dica"
+                    onClick={() => {
+                      setHintDismissed(true)
+                      writePref('tasks.hintDismissed', '1')
+                    }}
+                  >
+                    <IconX size={12} />
+                  </button>
                 </Panel>
               )}
             </ReactFlow>

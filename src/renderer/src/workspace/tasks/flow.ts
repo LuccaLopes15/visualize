@@ -2,7 +2,8 @@
 // React Flow import, so it is unit-tested in Node. The React layer only maps
 // these specs onto React Flow nodes/edges.
 import type { PlanDep, PlanGraph, PlanNode } from '@shared/types'
-import { layoutPlan, nodeSize, type Lane, type LayoutDir, type Point } from './layout'
+import { layoutPlan, nodeSize, type Lane, type LayoutDir, type Point, type Rect } from './layout'
+import { routeDependency } from './route'
 
 export type HandleId = 't' | 'b' | 'l' | 'r'
 
@@ -30,6 +31,11 @@ export interface FlowEdgeSpec {
    * hidden by a collapsed branch (not individually removable).
    */
   aggregated: boolean
+  /**
+   * Dependencies only: orthogonal route (flow coordinates, handle to handle) that avoids the other cards,
+   * or null when the plain curve between the handles is clear.
+   */
+  route: Point[] | null
 }
 
 export interface FlowModel {
@@ -38,6 +44,8 @@ export interface FlowModel {
   edges: FlowEdgeSpec[]
   /** Changes only when node positions would change (structure / order / direction / collapse). */
   layoutKey: string
+  /** Nodes in the whole plan (visible or not): what "how big did the plan get" is measured on. */
+  total: number
 }
 
 export function directChildCounts(nodes: readonly Pick<PlanNode, 'id' | 'parentId'>[]): Map<string, number> {
@@ -113,7 +121,8 @@ export function buildFlow(graph: PlanGraph, opts: { dir: LayoutDir; collapsed: R
       target: n.id,
       sourceHandle: hierSrc,
       targetHandle: hierTgt,
-      aggregated: false
+      aggregated: false,
+      route: null
     })
   }
 
@@ -140,6 +149,9 @@ export function buildFlow(graph: PlanGraph, opts: { dir: LayoutDir; collapsed: R
       { pos: positions.get(from) as Point, size: nodeSize(kindOf(from)) },
       { pos: positions.get(to) as Point, size: nodeSize(kindOf(to)) }
     )
+    const rectOf = (nid: string): Rect => ({ ...(positions.get(nid) as Point), ...nodeSize(kindOf(nid)) })
+    const others = visible.filter((n) => n.id !== from && n.id !== to).map((n) => rectOf(n.id))
+    const route = routeDependency(dir, h.source, h.target, rectOf(from), rectOf(to), others)
     edges.push({
       id,
       kind: 'dep',
@@ -147,12 +159,13 @@ export function buildFlow(graph: PlanGraph, opts: { dir: LayoutDir; collapsed: R
       target: to,
       sourceHandle: h.source,
       targetHandle: h.target,
-      aggregated: from !== d.fromId || to !== d.toId
+      aggregated: from !== d.fromId || to !== d.toId,
+      route
     })
   }
 
   const layoutKey = `${dir}|${visible.map((n) => `${n.id}:${n.parentId ?? ''}:${n.sort}:${n.kind}`).join(',')}`
-  return { nodes, lanes, edges, layoutKey }
+  return { nodes, lanes, edges, layoutKey, total: graph.nodes.length }
 }
 
 /** Ids that no longer exist are dropped (selection / collapsed state across refetches). */
