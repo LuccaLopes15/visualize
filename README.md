@@ -1,85 +1,80 @@
 # Visualize
 
-App Windows para capturar ideias em 2 segundos e, depois, transformá-las em plano executável.
-Design completo e fases: ver o plano do projeto. **Estado atual: Fase 4 (aba Tarefas + plano de tarefas no Claude).**
+**Capture uma ideia em 2 segundos. Transforme-a em plano executável depois, com calma.**
 
-## Comandos
+Visualize é um app desktop para Windows que resolve um problema comum: ideias de sistemas, funcionalidades e refatorações surgem enquanto você trabalha em outra coisa, e se você não anota na hora, elas somem ou ficam nebulosas. O app captura a ideia sem quebrar seu foco e, depois, ajuda a levá-la de rascunho a plano de tarefas, com o Claude Code como parceiro de raciocínio.
 
-| Comando | O quê |
+```
+ideia  →  board livre  →  plano macro  →  tarefas (grafo)  →  tickets no Azure DevOps
+```
+
+> **Status:** em desenvolvimento ativo, versão `0.1.0`. Fases 1 a 4 prontas; a integração com o Azure DevOps (fase 5) é a próxima.
+
+## O que ele faz
+
+- **Captura instantânea.** Um atalho global (`Ctrl+Alt+Space` por padrão, configurável) abre uma janelinha sem borda: digite o título, `Enter` salva, `Esc` fecha, e o foco volta para o app em que você estava.
+- **Hub de ideias e projetos.** Ideias soltas ou vinculadas a um ou mais projetos (cada projeto aponta para uma pasta do seu PC). Uma ideia pode envolver vários projetos, com um principal.
+- **Board livre.** Cada ideia tem um quadro [Excalidraw](https://excalidraw.com) com autosave, para rabiscar fluxos e arquiteturas.
+- **Plano macro.** Editor Markdown com prévia ao lado do board.
+- **Claude no workspace.** Um chat nativo que roda o **Claude Code já instalado e logado** na sua máquina. O Claude lê o código dos seus projetos (somente leitura), desenha no board, escreve o plano macro e monta o plano de tarefas por você.
+- **Grafo de tarefas.** Stories, tasks e sub-tasks com dependências, que podem cruzar stories e projetos, em um grafo com layout automático. Dá para editar à mão ou pedir ao Claude ("quebra o plano macro em tarefas por projeto", "a tarefa Y depende da Z").
+- **Segue o seu fluxo.** Fica na bandeja do sistema, inicia com o Windows (opcional) e mantém uma única instância.
+- **Local e privado.** Tudo fica em um banco SQLite no seu PC. Nada é escrito nas pastas dos seus projetos.
+
+## Como o Claude é integrado
+
+O app não usa a API da Anthropic diretamente. Ele executa o Claude Code CLI em modo headless (`claude -p` com `stream-json`), usando a instalação e o login que você já tem:
+
+- um processo por workspace aberto, com a sessão retomada via `--resume`;
+- **acesso somente leitura ao código** (`Read`, `Glob`, `Grep`), sem editar arquivos nem rodar comandos;
+- um **servidor MCP local** (`visualize`, em `127.0.0.1`, com token Bearer por sessão) que dá ao Claude as ferramentas para mexer no board, no plano macro e nas tarefas.
+
+Detalhes e armadilhas em [`docs/spike-fase3.md`](docs/spike-fase3.md).
+
+## Stack
+
+| Camada | Tecnologia |
 | --- | --- |
-| `npm install` | instala dependências |
-| `npm run dev` | roda o app em modo desenvolvimento (HMR no renderer) |
+| Shell desktop | Electron + TypeScript, build com `electron-vite` |
+| Interface | React 19, Excalidraw, React Flow (`@xyflow/react`) + dagre |
+| Dados | SQLite via `better-sqlite3`, migrations versionadas |
+| IA | Claude Code CLI + servidor MCP (`@modelcontextprotocol/sdk`) |
+| Validação / testes | Zod, Vitest |
+| Empacotamento | electron-builder (instalador NSIS) |
+
+## Começando
+
+**Pré-requisitos:** Windows, Node.js 22+ e, para usar o chat, o [Claude Code](https://claude.com/claude-code) instalado e logado.
+
+```bash
+npm install
+npm run dev
+```
+
+Não é preciso Visual Studio Build Tools: o `better-sqlite3` usa binários pré-compilados.
+
+| Comando | O que faz |
+| --- | --- |
+| `npm run dev` | roda em desenvolvimento, com HMR no renderer |
+| `npm test` | testes unitários (Vitest) |
 | `npm run typecheck` | checa tipos (main/preload e renderer) |
-| `npm test` | testes unitários (vitest) |
 | `npm run build` | typecheck + build de produção em `out/` |
-| `npm run dist:win` | gera instalador NSIS em `dist/` (não usado na Fase 1) |
+| `npm run dist:win` | gera o instalador NSIS em `dist/` |
 
-## Estrutura
+Para testar com um perfil separado e não misturar com seus dados: `VISUALIZE_USER_DATA=<pasta> npm run dev`.
 
-```
-src/
-  shared/            tipos de domínio, contrato IPC tipado (ipc.ts) e shape de window.api (api.ts)
-  main/
-    index.ts         bootstrap: instância única, tray, atalho global, janelas, autostart
-    db/              SQLite (better-sqlite3): conexão, migrations versionadas (PRAGMA user_version),
-                     repositórios (ideas, projects, settings, boards, macroPlans) + testes
-    ipc/             handlers por namespace (ideas:*, projects:*, settings:*, capture:*, boards:*, macro:*,
-                     chat:*, claude:*, app:*)
-    claude/          Claude Code CLI headless: resolução do executável (shim npm -> claude.exe), ambiente
-                     limpo, argumentos, parser NDJSON, normalização de eventos, sessão por workspace
-    mcp/             servidor MCP "visualize" (Streamable HTTP em 127.0.0.1, Bearer por sessão), tools e
-                     ponte main -> renderer para as tools de board
-    flush.ts         pede ao renderer para gravar autosaves pendentes (antes de sair / ao esconder)
-    windows/         janela principal (hub) e janela de captura
-    hotkey.ts tray.ts autostart.ts events.ts
-  preload/           contextBridge -> window.api (tipado por shared/api.ts)
-  renderer/
-    index.html       hub          -> src/main.tsx
-    capture.html     captura      -> src/capture.tsx
-    src/             React (components/, hooks/, lib/, styles/)
-      workspace/     workspace da ideia: Workspace (cabeçalho, abas, slot do chat), Board (Excalidraw,
-                     chunk lazy), MacroPlanTab (markdown + prévia), boardService (API viva do board,
-                     ponto de entrada da Fase 3), boardScene (o que é persistido)
-      workspace/board/   tools de board do Claude: build (skeletons + layout dagre), summary (board_read),
-                         ops (aplica na cena viva via updateScene)
-      workspace/chat/    painel de chat (useChat guarda o estado do turno; ChatPanel renderiza)
-resources/           ícones (app e bandeja)
-```
+## Roadmap
 
-## Notas
+- [x] **Fase 1:** captura global, hub de ideias e projetos, bandeja, autostart
+- [x] **Fase 2:** workspace da ideia com board (Excalidraw) e plano macro
+- [x] **Fase 3:** chat com Claude Code e ferramentas de board e plano
+- [x] **Fase 4:** aba Tarefas (grafo, edição manual e geração pelo Claude)
+- [ ] **Fase 5:** criar os tickets no Azure DevOps (Story e Task, hierarquia, predecessores)
+- [ ] **Fase 6:** terminal embutido opcional, busca no hub, instalador final
 
-- **Dados**: `%APPDATA%\Visualize\visualize.db` no app instalado; em dev usa
-  `%APPDATA%\Visualize (dev)\visualize.db` para não misturar. `VISUALIZE_USER_DATA=<pasta>` sobrescreve.
-- **better-sqlite3 13** traz binários N-API pré-compilados (`prebuilds/`), que carregam tanto no Node
-  (testes) quanto no Electron. Por isso não há rebuild no `postinstall` (`npmRebuild: false` no
-  electron-builder) e não é preciso Visual Studio Build Tools.
-- **Autostart** só é aplicado ao Windows quando o app está empacotado; em dev a preferência é só salva.
-- **Nova migration**: acrescente um item em `src/main/db/migrations.ts` com `version` maior; nunca edite
-  uma migration já publicada.
-- **Workspace**: board (`boards` + imagens em `board_files`) e plano macro (`macro_plans`) ficam no banco,
-  com cascade ao excluir a ideia. Autosave com debounce de 800 ms (`lib/autosave.ts`), gravado também ao
-  trocar de aba, voltar ao hub, esconder a janela e antes de sair (main espera o `app:flushDone`, até 3 s).
-- **Excalidraw offline**: as fontes saem de `node_modules/@excalidraw/excalidraw/dist/prod/fonts` e são
-  servidas/copiadas em `excalidraw-assets/` (plugin em `electron.vite.config.ts`); o fallback para o CDN
-  esm.sh é reescrito no bundle para o caminho local. A CSP não libera nenhum host externo.
-- **Novo canal IPC**: declare em `src/shared/ipc.ts` (`IpcContract`), exponha em `src/shared/api.ts` +
-  `src/preload/index.ts` e registre o handler em `src/main/ipc/`.
-- **Claude (Fase 3)**: o chat roda o Claude Code **instalado e logado** do usuário (`claude -p` com stream-json),
-  um processo por workspace aberto, encerrado ao sair do workspace/fechar o app; sessão retomada com `--resume`.
-  Só leitura no código (`--tools Read,Glob,Grep`, `--permission-mode dontAsk`) + tools `mcp__visualize__*`;
-  `--setting-sources project` e `--strict-mcp-config`. Detalhes e armadilhas (variáveis `CLAUDE_CODE_*` herdadas)
-  em `docs/spike-fase3.md`. Caminho do executável e modelo ficam em Configurações (`claude_path`, `claude_model`).
-- **Plano de tarefas (Fase 4, camada de dados)**: stories/tasks/dependências em `plan_nodes`/`plan_deps` (migration v4),
-  regras em `src/main/db/repositories/plan.ts` + `src/shared/plan.ts` (helpers puros), `PlanService` em `src/main/plan/`
-  e canais `plan:*`. Contrato completo (tipos, semântica de `replaceAll`/`mergeAdd`, erros, eventos): `docs/fase4-contract.md`.
-- **Tarefas (Fase 4, uso)**: a aba **Tarefas** do workspace mostra o plano como grafo (React Flow + layout dagre):
-  stories (uma por projeto, coloridas por projeto), tasks e sub-tasks (aresta sólida "filha") e dependências (tracejada,
-  "depende de"; podem cruzar stories/projetos; ciclos são barrados). Edição manual: **+ História**, duplo clique renomeia,
-  painel lateral (descrição em Markdown, projeto da story, pai, ordem, dependências), arrastar da borda de um cartão até
-  outro liga (modo "Dependência" ou "Filha"; Alt inverte), Delete apaga (com confirmação), **Reorganizar** reaplica o layout.
-  Pelo chat: "quebra o plano macro em tarefas por projeto" gera tudo de uma vez (`tasks_replace_all`); depois peça mudanças
-  incrementais ("adiciona uma subtarefa de testes na tarefa X", "a tarefa Y depende da Z") ou "lê as tarefas e me diz o que
-  mudou". A aba atualiza ao vivo (ponto na aba quando Claude muda o plano com outra aba ativa; nós novos piscam). Nós com
-  ticket do Azure DevOps (Fase 5) mostram `#id`, marcam "desatualizado" se título/descrição mudarem e Claude nunca os apaga.
-- **Teste manual end-to-end**: `VISUALIZE_USER_DATA=<pasta> npm run dev` (perfil separado), com modelo `sonnet` em
-  Configurações para gastar pouco.
+## Documentação
+
+- [`docs/design.md`](docs/design.md): decisões de design e plano completo por fases
+- [`docs/desenvolvimento.md`](docs/desenvolvimento.md): estrutura do código e notas técnicas
+- [`docs/fase4-contract.md`](docs/fase4-contract.md): contrato do plano de tarefas (tipos, semântica, erros, eventos)
+- [`docs/spike-fase3.md`](docs/spike-fase3.md): integração com o Claude Code CLI
