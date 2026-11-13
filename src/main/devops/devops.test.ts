@@ -342,8 +342,20 @@ describe('DevOpsClient errors', () => {
     await expect(c.listProjects()).rejects.toMatchObject({ kind: 'network' })
   })
 
-  it('rejects non-JSON bodies (sign-in page)', async () => {
-    const err = await failWith({ status: 203, body: '<html>login</html>' })
+  it('asks Azure for 401 instead of the sign-in redirect', async () => {
+    const { c, calls } = client([{ body: { value: [] } }])
+    await c.listProjects()
+    expect(header(calls[0].init, 'X-TFS-FedAuthRedirect')).toBe('Suppress')
+  })
+
+  it('treats the 203 sign-in page as auth', async () => {
+    const err = await failWith({ status: 203, body: '<html>login</html>', headers: { 'Content-Type': 'text/html' } })
+    expect(err.kind).toBe('auth')
+    expect(err.message).toMatch(/PAT/)
+  })
+
+  it('rejects other non-JSON bodies', async () => {
+    const err = await failWith({ status: 200, body: '<html>outra coisa</html>' })
     expect(err.kind).toBe('unexpected')
   })
 

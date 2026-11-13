@@ -267,7 +267,12 @@ export class DevOpsClient {
     opts: { query?: Query; patch?: JsonPatchOp[] } = {}
   ): Promise<{ body: unknown; headers: Headers }> {
     const url = this.#url(path, opts.query)
-    const headers: Record<string, string> = { Authorization: this.#auth, Accept: 'application/json' }
+    // Without X-TFS-FedAuthRedirect a bad PAT gets a 302 to the sign-in page instead of a 401.
+    const headers: Record<string, string> = {
+      Authorization: this.#auth,
+      Accept: 'application/json',
+      'X-TFS-FedAuthRedirect': 'Suppress'
+    }
     let payload: string | undefined
     if (opts.patch) {
       headers['Content-Type'] = 'application/json-patch+json'
@@ -287,8 +292,10 @@ export class DevOpsClient {
         continue
       }
       if (!res.ok) throw errorForStatus(res.status, await serverMessage(res))
+      // 203 is the sign-in page Azure answers when it redirects a rejected PAT anyway.
+      if (res.status === 203) throw errorForStatus(401, null)
 
-      // Azure answers HTML (a sign-in page) with 200/203 when auth is wrong in some setups.
+      // Any other non-JSON body means the URL does not point at the REST API.
       const text = await res.text()
       try {
         return { body: text ? JSON.parse(text) : {}, headers: res.headers }
