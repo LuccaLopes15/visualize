@@ -4,7 +4,8 @@ import { IconFolder, IconPlus } from './Icons'
 interface Props {
   projects: Project[]
   onOpen: (id: number) => void
-  onCreate: () => void
+  /** Omit to hide the "Novo projeto" card (search results). */
+  onCreate?: () => void
 }
 
 export function ProjectGrid({ projects, onOpen, onCreate }: Props): React.JSX.Element {
@@ -26,10 +27,12 @@ export function ProjectGrid({ projects, onOpen, onCreate }: Props): React.JSX.El
           </span>
         </button>
       ))}
-      <button className="project-card project-card-new" onClick={onCreate}>
-        <IconPlus size={20} />
-        <span>Novo projeto</span>
-      </button>
+      {onCreate && (
+        <button className="project-card project-card-new" onClick={onCreate}>
+          <IconPlus size={20} />
+          <span>Novo projeto</span>
+        </button>
+      )}
     </div>
   )
 }

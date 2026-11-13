@@ -26,7 +26,7 @@ import {
   IconTrash,
   IconX
 } from './components/Icons'
-import { filterIdeas } from './lib/search'
+import { filterIdeas, filterProjects } from './lib/search'
 import { formatAccelerator } from './lib/accelerator'
 
 const api = window.api
@@ -159,6 +159,7 @@ export function App(): React.JSX.Element {
 
   const searching = query.trim() !== '' && view.kind !== 'settings'
   const results = searching ? filterIdeas(ideas, query) : []
+  const projectResults = searching ? filterProjects(projects, query) : []
 
   const listProps = {
     projectsById,
@@ -183,6 +184,16 @@ export function App(): React.JSX.Element {
           </h2>
         </div>
         <IdeaList {...listProps} ideas={results} empty="Nenhuma ideia encontrada." />
+        {projectResults.length > 0 && (
+          <>
+            <div className="section-head">
+              <h2>
+                Projetos <span className="count">{projectResults.length}</span>
+              </h2>
+            </div>
+            <ProjectGrid projects={projectResults} onOpen={(id) => go({ kind: 'project', id })} />
+          </>
+        )}
       </section>
     )
   } else if (view.kind === 'home') {
@@ -376,7 +387,7 @@ export function App(): React.JSX.Element {
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar ideias  (Ctrl+F)"
+              placeholder="Buscar ideias e projetos  (Ctrl+F)"
             />
             {query && (
               <button className="icon-btn" onClick={() => setQuery('')} title="Limpar busca">

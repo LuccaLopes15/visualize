@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterIdeas, matchesQuery, normalize } from './search'
+import { filterIdeas, filterProjects, matchesQuery, normalize } from './search'
 import { eventToAccelerator, formatAccelerator, type KeyLike } from './accelerator'
 import { basename } from './format'
 
@@ -23,6 +23,17 @@ describe('search', () => {
     ]
     expect(filterIdeas(list, '')).toBe(list)
     expect(filterIdeas(list, 'b')).toEqual([{ title: 'b', body: '' }])
+  })
+
+  it('filterProjects matches the name or the folder path', () => {
+    const list = [
+      { name: 'Visualize', folderPath: 'D:\Projetos\Visualize' },
+      { name: 'Portal Financeiro', folderPath: 'C:\src\portal' }
+    ]
+    expect(filterProjects(list, '')).toBe(list)
+    expect(filterProjects(list, 'financeiro')).toEqual([list[1]])
+    expect(filterProjects(list, 'projetos')).toEqual([list[0]])
+    expect(filterProjects(list, 'portal kafka')).toEqual([])
   })
 })
 
