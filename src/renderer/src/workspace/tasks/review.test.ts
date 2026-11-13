@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolvePlanNodes } from '@shared/plan'
 import type { PlanGraph, RawPlanNode } from '@shared/types'
-import { DraftCore } from './draftCore'
+import { DraftCore, mergeDrafts } from './draftCore'
 import { BIG_CHANGE, shouldFitAfterLayout, shouldFitAfterResize, viewportUntouched } from './fit'
 import { buildFlow } from './flow'
 import { nodeSize, type Rect } from './layout'
@@ -90,6 +90,37 @@ describe('DraftCore (useDraft state machine)', () => {
     expect(d.remote('b')).toBe(false)
     expect(d.conflict).toBeNull()
     expect(d.flush()).toBeNull() // nothing left to write
+  })
+
+  it('LKA-18: leaving with a conflict keeps both versions (Claude first, then the user draft)', () => {
+    const d = new DraftCore('original')
+    d.edit('minha versão')
+    d.remote('versão do Claude')
+    const merged = d.leave(mergeDrafts)
+    expect(merged).toBe(mergeDrafts('versão do Claude', 'minha versão'))
+    expect(merged).toContain('versão do Claude')
+    expect(merged).toContain('minha versão')
+    expect(d).toMatchObject({ text: merged, base: 'versão do Claude', dirty: false, conflict: null })
+    expect(d.remote(merged!)).toBe(false) // our own echo, not a new conflict
+  })
+
+  it('LKA-18: leaving without a merge rule, or without a conflict, is a plain flush', () => {
+    const held = new DraftCore('original')
+    held.edit('minha')
+    held.remote('do Claude')
+    expect(held.leave()).toBeNull() // titles: still held, nothing merged
+    expect(held.conflict).toBe('do Claude')
+
+    const clean = new DraftCore('original')
+    clean.edit('minha')
+    expect(clean.leave(mergeDrafts)).toBe('minha')
+    expect(new DraftCore('a').leave(mergeDrafts)).toBeNull()
+  })
+
+  it('LKA-18: mergeDrafts marks the user part and skips an empty side', () => {
+    expect(mergeDrafts('do Claude', 'minha')).toMatch(/^do Claude\n\n---\n\n\*\*Seu rascunho\*\*.*\n\nminha$/)
+    expect(mergeDrafts('do Claude', '   ')).toBe('do Claude')
+    expect(mergeDrafts('', 'minha')).toBe('minha')
   })
 
   it('reset goes back to the stored value', () => {
