@@ -6,10 +6,11 @@ import { IpcEvents } from '@shared/ipc'
  * Asks a renderer to write its pending autosaves (workspace board / plano
  * macro) and waits for the `app:flushDone` ack, or the timeout, whichever
  * comes first. Used before quitting so a debounced save is never lost.
+ * `leaving` tells the renderer nothing on screen will survive (app quitting).
  */
 const pending = new Map<string, () => void>()
 
-export function requestRendererFlush(win: BrowserWindow | null, timeoutMs = 3000): Promise<void> {
+export function requestRendererFlush(win: BrowserWindow | null, timeoutMs = 3000, leaving = false): Promise<void> {
   if (!win || win.isDestroyed() || win.webContents.isCrashed()) return Promise.resolve()
   return new Promise((resolve) => {
     const token = randomUUID()
@@ -23,14 +24,14 @@ export function requestRendererFlush(win: BrowserWindow | null, timeoutMs = 3000
       done()
     }, timeoutMs)
     pending.set(token, done)
-    win.webContents.send(IpcEvents.flushRequest, token)
+    win.webContents.send(IpcEvents.flushRequest, token, leaving)
   })
 }
 
 /** Fire-and-forget variant (window hidden): no need to wait. */
-export function notifyRendererFlush(win: BrowserWindow | null): void {
+export function notifyRendererFlush(win: BrowserWindow | null, leaving = false): void {
   if (!win || win.isDestroyed()) return
-  win.webContents.send(IpcEvents.flushRequest, '')
+  win.webContents.send(IpcEvents.flushRequest, '', leaving)
 }
 
 export function resolveFlush(token: unknown): void {

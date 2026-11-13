@@ -167,7 +167,7 @@ async function bootstrap(): Promise<void> {
     if (!win || win.isDestroyed()) return
     event.preventDefault()
     flushedForQuit = true
-    void requestRendererFlush(win).finally(() => app.quit())
+    void requestRendererFlush(win, undefined, true).finally(() => app.quit())
   })
 
   app.on('will-quit', () => {

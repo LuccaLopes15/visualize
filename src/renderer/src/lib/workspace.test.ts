@@ -91,6 +91,15 @@ describe('Autosaver', () => {
     await flushAll()
     expect(saved).toHaveLength(2)
   })
+
+  it('flushAll tells every flusher whether the app is leaving', async () => {
+    const seen: (boolean | undefined)[] = []
+    const off = registerFlusher(async (opts) => void seen.push(opts.leaving))
+    await flushAll()
+    await flushAll({ leaving: true })
+    off()
+    expect(seen).toEqual([undefined, true])
+  })
 })
 
 function apply(value: string, e: Edit): string {

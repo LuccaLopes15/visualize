@@ -86,8 +86,11 @@ export interface VisualizeApi {
     info: Invoke<'app:info'>
     openHub: Invoke<'app:openHub'>
     flushDone: Invoke<'app:flushDone'>
-    /** Main wants pending autosaves flushed; reply with `flushDone(token)`. */
-    onFlushRequest: (cb: (token: string) => void) => Unsubscribe
+    /**
+     * Main wants pending autosaves flushed; reply with `flushDone(token)`. `leaving`: the app is
+     * quitting (or Windows logging off), so nothing kept on screen survives.
+     */
+    onFlushRequest: (cb: (token: string, leaving: boolean) => void) => Unsubscribe
   }
   /** Fires whenever main changes data; the renderer refetches that entity (`plan` events carry `ideaId`). */
   onDataChanged: (cb: (e: DataChangedEvent) => void) => Unsubscribe

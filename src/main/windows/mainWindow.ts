@@ -38,7 +38,7 @@ export function createMainWindow(showOnReady: boolean): BrowserWindow {
   // autosaves right away instead of waiting for the debounce.
   mainWindow.on('hide', () => notifyRendererFlush(mainWindow))
   mainWindow.on('minimize', () => notifyRendererFlush(mainWindow))
-  mainWindow.on('query-session-end', () => notifyRendererFlush(mainWindow))
+  mainWindow.on('query-session-end', () => notifyRendererFlush(mainWindow, true))
 
   mainWindow.on('closed', () => {
     mainWindow = null
