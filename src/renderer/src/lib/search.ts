@@ -1,4 +1,4 @@
-import type { Idea } from '@shared/types'
+import type { Idea, Project } from '@shared/types'
 
 /** Lowercase + strip accents so "acao" matches "Ação". */
 export function normalize(text: string): string {
@@ -18,4 +18,11 @@ export function matchesQuery(idea: Pick<Idea, 'title' | 'body'>, query: string):
 
 export function filterIdeas<T extends Pick<Idea, 'title' | 'body'>>(ideas: T[], query: string): T[] {
   return query.trim() ? ideas.filter((i) => matchesQuery(i, query)) : ideas
+}
+
+/** Same rule for projects, over the name and the folder path. */
+export function filterProjects<T extends Pick<Project, 'name' | 'folderPath'>>(projects: T[], query: string): T[] {
+  return query.trim()
+    ? projects.filter((p) => matchesQuery({ title: p.name, body: p.folderPath }, query))
+    : projects
 }
