@@ -65,7 +65,8 @@ function wrappedLines(text: string, fontSize: number, innerWidth: number): numbe
 
 /** Size that fits `label` in a shape of kind `shape`. */
 export function shapeSize(label: string, shape: ShapeKind, fontSize = NODE_FONT): { width: number; height: number } {
-  const w = Math.min(280, Math.max(160, textWidth(label, fontSize) + 48))
+  // Capped so long labels wrap into 2-3 lines instead of stretching the flow.
+  const w = Math.min(240, Math.max(160, textWidth(label, fontSize) + 48))
   const lines = wrappedLines(label, fontSize, w - 40)
   const h = Math.max(72, Math.ceil(lines * fontSize * LINE_H + 36))
   if (shape === 'diamond') return { width: Math.round(w * 1.35), height: Math.round(h * 1.5) }
@@ -175,6 +176,80 @@ function polylineBox(s: Skeleton): Box {
 
 // ---- board_add_flow ---------------------------------------------------------------
 
+/** Widest LR flow kept on one line; past it the flow wraps (~70% zoom on a common monitor). */
+export const MAX_FLOW_WIDTH = 1400
+const BAND_GAP = 110
+/** Flows with fewer columns (dagre ranks) than this never wrap. */
+const MIN_WRAP_COLUMNS = 5
+
+interface LaidNode {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * Wraps a wide LR layout into stacked bands (serpentine): columns (dagre ranks)
+ * fill a band up to MAX_FLOW_WIDTH, the next band goes below it and odd bands
+ * run right-to-left, so the arrow from one band to the next goes straight down.
+ * Returns null when the flow already fits or is short.
+ */
+function serpentine(laid: LaidNode[]): {
+  bandOf: Map<LaidNode, number>
+  moveNode: (n: LaidNode) => void
+  movePoint: (p: { x: number; y: number }, band: number) => { x: number; y: number }
+} | null {
+  // Columns: nodes of a rank share the center x.
+  const cols = new Map<number, LaidNode[]>()
+  for (const n of laid) {
+    const k = Math.round(n.x)
+    cols.set(k, [...(cols.get(k) ?? []), n])
+  }
+  const columns = [...cols.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, ns]) => ({
+      nodes: ns,
+      left: Math.min(...ns.map((n) => n.x - n.width / 2)),
+      right: Math.max(...ns.map((n) => n.x + n.width / 2))
+    }))
+  if (columns.length < MIN_WRAP_COLUMNS || columns[columns.length - 1].right - columns[0].left <= MAX_FLOW_WIDTH) return null
+
+  const bands: { left: number; right: number; nodes: LaidNode[] }[] = []
+  for (const c of columns) {
+    const cur = bands[bands.length - 1]
+    if (cur && c.right - cur.left <= MAX_FLOW_WIDTH) {
+      cur.right = c.right
+      cur.nodes.push(...c.nodes)
+    } else bands.push({ left: c.left, right: c.right, nodes: [...c.nodes] })
+  }
+  const span = Math.max(...bands.map((b) => b.right - b.left))
+  const bandOf = new Map<LaidNode, number>()
+  const shift: { left: number; top: number; dy: number; flip: boolean }[] = []
+  let y = 0
+  bands.forEach((b, i) => {
+    const top = Math.min(...b.nodes.map((n) => n.y - n.height / 2))
+    const bottom = Math.max(...b.nodes.map((n) => n.y + n.height / 2))
+    shift.push({ left: b.left, top, dy: y - top, flip: i % 2 === 1 })
+    for (const n of b.nodes) bandOf.set(n, i)
+    y += bottom - top + BAND_GAP
+  })
+  const movePoint = (p: { x: number; y: number }, i: number): { x: number; y: number } => {
+    const s = shift[i]
+    const local = p.x - s.left
+    return { x: s.flip ? span - local : local, y: p.y + s.dy }
+  }
+  return {
+    bandOf,
+    movePoint,
+    moveNode: (n) => {
+      const p = movePoint(n, bandOf.get(n)!)
+      n.x = p.x
+      n.y = p.y
+    }
+  }
+}
+
 export function buildFlow(flow: FlowSpec, existing: readonly ElementLike[], genId: IdGen = randomId): BuildResult {
   const warnings: string[] = []
   const nodes = flow.nodes
@@ -214,6 +289,18 @@ export function buildFlow(flow: FlowSpec, existing: readonly ElementLike[], genI
     g.setEdge(e.from, e.to, label, `e${i}`)
   })
   layout(g)
+  const band = dir === 'LR' ? serpentine(nodes.map((n) => g.node(n.id))) : null
+  if (band) {
+    // Move the nodes (and the edges inside a band) to their serpentine place.
+    for (const n of nodes) band.moveNode(g.node(n.id))
+    edges.forEach((e, i) => {
+      const ge = g.edge({ v: e.from, w: e.to, name: `e${i}` })
+      const b = band.bandOf.get(g.node(e.from))
+      if (ge && b !== undefined && b === band.bandOf.get(g.node(e.to))) {
+        ge.points = (ge.points ?? []).map((p: { x: number; y: number }) => band.movePoint(p, b))
+      } else if (ge) ge.points = [] // crosses bands: straight arrow between the boxes
+    })
+  }
 
   // Graph coordinates -> board: top-left of the flow at the free-space origin
   // (leaving room for the frame padding / title).
