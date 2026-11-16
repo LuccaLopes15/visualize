@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog, safeStorage } from 'electron'
 import { join } from 'node:path'
 import { createRepositories, type Repositories } from './db'
 import { notifyPlanChanged } from './events'
@@ -16,6 +16,7 @@ import { IpcEvents } from '@shared/ipc'
 import { VisualizeMcpServer } from './mcp/server'
 import { requestBoardOp } from './mcp/boardBridge'
 import { ChatManager } from './claude/manager'
+import { DevOpsSettings } from './devops/settings'
 
 // Dev runs use a separate profile so they never touch the real database
 // (and the single-instance lock doesn't collide with an installed copy).
@@ -126,6 +127,7 @@ async function bootstrap(): Promise<void> {
   registerIpc({
     chat,
     plan,
+    devops: new DevOpsSettings(repos.settings, safeStorage),
     repos,
     dbPath,
     hotkeyStatus: () => hotkeys.status(),
