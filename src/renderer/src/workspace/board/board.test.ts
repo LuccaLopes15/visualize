@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FlowSpec } from '@shared/board'
-import { buildAdd, buildFlow, type Skeleton } from './build'
+import { MAX_FLOW_WIDTH, buildAdd, buildFlow, shapeSize, type Skeleton } from './build'
 import { boxesOverlap, clusterBoxes, freeSpaceOrigin, simplifyPolyline, type ElementLike } from './geometry'
 import { formatBoardSummary } from './summary'
 import { PALETTE } from './palette'
@@ -116,6 +116,59 @@ describe('buildFlow', () => {
     expect(() => buildFlow({ nodes: [{ id: 'x', label: '1' }, { id: 'x', label: '2' }], edges: [] }, [], seqId)).toThrow(
       /repetido/
     )
+  })
+})
+
+describe('buildFlow: fluxos LR largos', () => {
+  const chain = (steps: number): FlowSpec => ({
+    direction: 'LR',
+    nodes: Array.from({ length: steps }, (_, i) => ({ id: `p${i}`, label: `Passo ${i + 1} do processo` })),
+    edges: Array.from({ length: steps - 1 }, (_, i) => ({ from: `p${i}`, to: `p${i + 1}` }))
+  })
+  const shapesOf = (r: ReturnType<typeof buildFlow>): Skeleton[] => r.skeletons.filter((s) => s.type === 'rectangle')
+  const widthOf = (ss: Skeleton[]): number =>
+    Math.max(...ss.map((s) => s.x + Number(s['width']))) - Math.min(...ss.map((s) => s.x))
+
+  it('long labels wrap into taller boxes instead of wider ones', () => {
+    const short = shapeSize('Hub', 'rectangle')
+    const long = shapeSize('Validar o pedido do cliente e reservar o estoque', 'rectangle')
+    expect(long.width).toBeLessThanOrEqual(240)
+    expect(long.height).toBeGreaterThan(short.height)
+  })
+
+  it('a short chain stays on one line', () => {
+    n = 0
+    const shapes = shapesOf(buildFlow(chain(4), [], seqId))
+    expect(new Set(shapes.map((s) => s.y)).size).toBe(1)
+    for (let i = 1; i < shapes.length; i++) expect(shapes[i].x).toBeGreaterThan(shapes[i - 1].x)
+  })
+
+  it.each([10, 12, 16])('a %i-step chain wraps in a serpentine within MAX_FLOW_WIDTH', (steps) => {
+    n = 0
+    const r = buildFlow(chain(steps), [], seqId)
+    const shapes = shapesOf(r)
+    expect(shapes).toHaveLength(steps)
+    expect(widthOf(shapes)).toBeLessThanOrEqual(MAX_FLOW_WIDTH)
+    for (let i = 0; i < shapes.length; i++)
+      for (let j = i + 1; j < shapes.length; j++) expect(boxesOverlap(box(shapes[i]), box(shapes[j]), 20)).toBe(false)
+    // rows top to bottom; the 1st runs left-to-right, the 2nd right-to-left
+    const rows = [...new Set(shapes.map((s) => s.y))].sort((a, b) => a - b)
+    expect(rows.length).toBeGreaterThan(1)
+    const row = (k: number): Skeleton[] => shapes.filter((s) => s.y === rows[k])
+    expect(shapes.indexOf(row(0)[0])).toBe(0)
+    for (const [k, xs] of [row(0), row(1)].entries()) {
+      for (let i = 1; i < xs.length; i++) {
+        if (k === 0) expect(xs[i].x).toBeGreaterThan(xs[i - 1].x)
+        else expect(xs[i].x).toBeLessThan(xs[i - 1].x)
+      }
+    }
+    // the step that changes rows sits right below the end of the previous row
+    const last0 = row(0)[row(0).length - 1]
+    expect(row(1)[0].x).toBe(last0.x)
+    // every edge still becomes a bound arrow, none of them crossing the boxes' rows wildly
+    expect(r.bindings).toHaveLength(steps - 1)
+    const arrows = r.skeletons.filter((s) => s.type === 'arrow')
+    for (const a of arrows) for (const [px] of a['points'] as [number, number][]) expect(Math.abs(px)).toBeLessThan(MAX_FLOW_WIDTH)
   })
 })
 
