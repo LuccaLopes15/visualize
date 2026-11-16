@@ -31,6 +31,7 @@ import type {
 } from './types'
 import type { BoardOpResult } from './board'
 import type { ChatState, ClaudeSettings, ClaudeStatus } from './chat'
+import type { DevOpsStatus, DevOpsTestResult } from './devops'
 
 export interface IpcContract {
   'ideas:list': () => Idea[]
@@ -102,6 +103,16 @@ export interface IpcContract {
   'plan:deleteNode': (ideaId: number, nodeId: string, force?: boolean) => PlanDeleteResult
   'plan:replaceAll': (ideaId: number, spec: PlanSpec, force?: boolean) => PlanWriteResult
   'plan:mergeAdd': (ideaId: number, spec: PlanAddSpec, parentId?: string | null) => PlanWriteResult
+
+  // ---- Fase 5: Azure DevOps. The PAT only goes in (`setPat`); nothing returns it.
+  'devops:getStatus': () => DevOpsStatus
+  /** Saves the org URL in canonical form ('' removes it); rejects an invalid URL. */
+  'devops:setOrgUrl': (url: string) => DevOpsStatus
+  /** Encrypts and saves the PAT (replaces any previous one). */
+  'devops:setPat': (pat: string) => DevOpsStatus
+  'devops:clearPat': () => DevOpsStatus
+  /** Lists the org's projects with the saved URL and PAT. */
+  'devops:testConnection': () => DevOpsTestResult
 
   'app:info': () => AppInfo
   'app:openHub': () => void

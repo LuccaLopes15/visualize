@@ -1179,6 +1179,31 @@ select.input {
   display: flex;
   gap: 8px;
 }
+/* Configurações → Azure DevOps (reuses the Claude Code card layout) */
+.devops-result {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.devops-pat-saved {
+  align-items: center;
+}
+.devops-pat-saved .status-ok {
+  flex: 1;
+}
+.devops-scopes {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.devops-scopes ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.devops-scopes strong {
+  color: var(--text);
+  font-weight: 600;
+}
 .claude-field-row .input {
   flex: 1;
   min-width: 0;

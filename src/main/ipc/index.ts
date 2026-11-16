@@ -18,6 +18,7 @@ import type { ChatManager } from '../claude/manager'
 import { publicStatus } from '../claude/manager'
 import { ChatError } from '../claude/session'
 import { resolveBoardReply } from '../mcp/boardBridge'
+import type { DevOpsSettings } from '../devops/settings'
 
 export interface IpcDeps {
   repos: Repositories
@@ -28,6 +29,8 @@ export interface IpcDeps {
   chat: ChatManager
   /** Fase 4: plan graph service (emits `dataChanged` { entity: 'plan', ideaId } on mutations). */
   plan: PlanService
+  /** Fase 5: Azure DevOps org URL + encrypted PAT. */
+  devops: DevOpsSettings
 }
 
 /** Registers all IPC handlers. One block per namespace. */
@@ -211,6 +214,15 @@ export function registerIpc(deps: IpcDeps): void {
     const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
+
+  // ---- devops:* (Fase 5) -------------------------------------------------
+  // The PAT comes in through setPat and never goes back out (nor to the logs).
+  const { devops } = deps
+  handle('devops:getStatus', () => devops.status())
+  handle('devops:setOrgUrl', (url) => devops.setOrgUrl(typeof url === 'string' ? url : ''))
+  handle('devops:setPat', (pat) => devops.setPat(typeof pat === 'string' ? pat : ''))
+  handle('devops:clearPat', () => devops.clearPat())
+  handle('devops:testConnection', () => devops.testConnection())
 
   // ---- app:* ------------------------------------------------------------
   handle('app:info', () => ({

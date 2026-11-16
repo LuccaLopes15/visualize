@@ -4,6 +4,7 @@ import { eventToAccelerator, formatAccelerator } from '../lib/accelerator'
 import { useToast } from './Toasts'
 import { IconKeyboard } from './Icons'
 import { ClaudeSettingsCard } from './ClaudeSettingsCard'
+import { DevOpsSettingsCard } from './DevOpsSettingsCard'
 
 const api = window.api
 
@@ -127,6 +128,8 @@ export function SettingsView({ settings, info }: Props): React.JSX.Element {
       </section>
 
       <ClaudeSettingsCard />
+
+      <DevOpsSettingsCard />
 
       <section className="settings-card">
         <div className="settings-text">

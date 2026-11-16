@@ -82,6 +82,13 @@ export interface VisualizeApi {
     setModel: Invoke<'claude:setModel'>
     pickPath: Invoke<'claude:pickPath'>
   }
+  devops: {
+    getStatus: Invoke<'devops:getStatus'>
+    setOrgUrl: Invoke<'devops:setOrgUrl'>
+    setPat: Invoke<'devops:setPat'>
+    clearPat: Invoke<'devops:clearPat'>
+    testConnection: Invoke<'devops:testConnection'>
+  }
   app: {
     info: Invoke<'app:info'>
     openHub: Invoke<'app:openHub'>

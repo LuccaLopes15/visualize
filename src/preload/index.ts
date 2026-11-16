@@ -98,6 +98,13 @@ const api: VisualizeApi = {
     setModel: (...a) => invoke('claude:setModel', ...a),
     pickPath: () => invoke('claude:pickPath')
   },
+  devops: {
+    getStatus: () => invoke('devops:getStatus'),
+    setOrgUrl: (...a) => invoke('devops:setOrgUrl', ...a),
+    setPat: (...a) => invoke('devops:setPat', ...a),
+    clearPat: () => invoke('devops:clearPat'),
+    testConnection: () => invoke('devops:testConnection')
+  },
   app: {
     info: () => invoke('app:info'),
     openHub: () => invoke('app:openHub'),
