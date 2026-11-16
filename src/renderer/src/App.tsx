@@ -77,8 +77,8 @@ export function App(): React.JSX.Element {
   // Main asks for pending autosaves (window hidden / app quitting); also flush
   // whenever the window gets hidden from the renderer's point of view.
   useEffect(() => {
-    const offFlush = api.app.onFlushRequest((token) => {
-      void flushAll().finally(() => {
+    const offFlush = api.app.onFlushRequest((token, leaving) => {
+      void flushAll({ leaving }).finally(() => {
         if (token) void api.app.flushDone(token)
       })
     })

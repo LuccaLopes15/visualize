@@ -102,7 +102,13 @@ const api: VisualizeApi = {
     info: () => invoke('app:info'),
     openHub: () => invoke('app:openHub'),
     flushDone: (...a) => invoke('app:flushDone', ...a),
-    onFlushRequest: (cb) => subscribe<string>(IpcEvents.flushRequest, cb)
+    onFlushRequest: (cb) => {
+      const listener = (_e: IpcRendererEvent, token: string, leaving?: boolean): void => cb(token, leaving === true)
+      ipcRenderer.on(IpcEvents.flushRequest, listener)
+      return () => {
+        ipcRenderer.removeListener(IpcEvents.flushRequest, listener)
+      }
+    }
   },
   onDataChanged: (cb) => subscribe<DataChangedEvent>(IpcEvents.dataChanged, cb)
 }

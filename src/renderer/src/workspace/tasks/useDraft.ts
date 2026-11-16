@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { registerFlusher } from '../../lib/autosave'
-import { DraftCore } from './draftCore'
+import { DraftCore, type Merge } from './draftCore'
 
 export interface Draft {
   draft: string
@@ -19,8 +19,16 @@ export interface Draft {
  * `flush()` (blur / Enter) or after `idleMs` without typing, and flushes on unmount and on the
  * global flush request (so switching selection, quitting, or Claude reading the plan never loses /
  * ignores an edit). See `DraftCore` for the rules about echoes and concurrent changes.
+ *
+ * With `merge`, leaving the field (unmount, app quitting) during an unresolved conflict writes
+ * both versions together instead of dropping the user's text.
  */
-export function useDraft(value: string, commit: (next: string) => void | Promise<unknown>, idleMs = 0): Draft {
+export function useDraft(
+  value: string,
+  commit: (next: string) => void | Promise<unknown>,
+  idleMs = 0,
+  merge?: Merge
+): Draft {
   const coreRef = useRef<DraftCore>(undefined)
   if (!coreRef.current) coreRef.current = new DraftCore(value)
   const core = coreRef.current
@@ -29,21 +37,27 @@ export function useDraft(value: string, commit: (next: string) => void | Promise
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const commitRef = useRef(commit)
   commitRef.current = commit
+  const mergeRef = useRef(merge)
+  mergeRef.current = merge
 
   useEffect(() => {
     if (core.remote(value)) render()
   }, [value, core, render])
 
-  const flush = useCallback(async (): Promise<void> => {
-    clearTimeout(timer.current)
-    const next = core.flush()
-    if (next === null) return
-    try {
-      await commitRef.current(next)
-    } catch {
-      /* the caller reports its own errors */
-    }
-  }, [core])
+  const write = useCallback(
+    async (leaving: boolean): Promise<void> => {
+      clearTimeout(timer.current)
+      const next = leaving ? core.leave(mergeRef.current) : core.flush()
+      if (next === null) return
+      try {
+        await commitRef.current(next)
+      } catch {
+        /* the caller reports its own errors */
+      }
+    },
+    [core]
+  )
+  const flush = useCallback(() => write(false), [write])
 
   const change = useCallback(
     (v: string) => {
@@ -74,12 +88,13 @@ export function useDraft(value: string, commit: (next: string) => void | Promise
   }, [core, render, flush])
 
   // Global flush (quit / hide / Claude's tasks_* tools) and unmount (selection change, panel closed).
-  useEffect(() => registerFlusher(flush), [flush])
+  // Quitting and unmounting are "leaving": an open conflict is merged instead of held.
+  useEffect(() => registerFlusher((opts) => write(opts.leaving === true)), [write])
   useEffect(
     () => () => {
-      void flush()
+      void write(true)
     },
-    [flush]
+    [write]
   )
 
   return { draft: core.text, change, flush, reset, conflict: core.conflict, acceptRemote, keepMine }

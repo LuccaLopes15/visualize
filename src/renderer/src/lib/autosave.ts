@@ -87,15 +87,20 @@ export class Autosaver<T> {
 // everything at once: leaving the workspace, switching tabs, window hidden,
 // app quitting (main sends `events:flushRequest`).
 
-const flushers = new Set<() => Promise<void>>()
+export interface FlushOptions {
+  /** The app is quitting: whatever is still on screen will not survive. */
+  leaving?: boolean
+}
 
-export function registerFlusher(fn: () => Promise<void>): () => void {
+const flushers = new Set<(opts: FlushOptions) => Promise<void>>()
+
+export function registerFlusher(fn: (opts: FlushOptions) => Promise<void>): () => void {
   flushers.add(fn)
   return () => {
     flushers.delete(fn)
   }
 }
 
-export async function flushAll(): Promise<void> {
-  await Promise.allSettled([...flushers].map((fn) => fn()))
+export async function flushAll(opts: FlushOptions = {}): Promise<void> {
+  await Promise.allSettled([...flushers].map((fn) => fn(opts)))
 }

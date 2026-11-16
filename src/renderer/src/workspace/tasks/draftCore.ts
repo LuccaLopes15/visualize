@@ -5,9 +5,21 @@
 //   must NEVER overwrite the text (it would eat the space the user just typed).
 // - A genuinely different value arriving while the user has unsent edits is a conflict: it is
 //   kept aside (`conflict`) and the commit is held until the user chooses.
+// - Leaving the field (other node, panel closed, app quitting) with the conflict still open must
+//   lose neither side: with a `Merge` rule both versions are written together (`leave`).
 
 export type Normalize = (text: string) => string
 const trimmed: Normalize = (s) => s.trim()
+
+/** Combines the stored (Claude's) version and the user's unsent draft into one text. */
+export type Merge = (remote: string, mine: string) => string
+
+/** Claude's version first, then the user's draft under a marker (an empty side is skipped). */
+export const mergeDrafts: Merge = (remote, mine) => {
+  if (!mine.trim()) return remote
+  if (!remote.trim()) return mine
+  return `${remote}\n\n---\n\n**Seu rascunho** (escrito enquanto o Claude alterava esta descrição):\n\n${mine}`
+}
 
 export class DraftCore {
   /** What the field shows. */
@@ -69,6 +81,20 @@ export class DraftCore {
     if (this.text === this.base || this.normalize(this.text) === this.base) return null
     this.sent = this.text
     return this.text
+  }
+
+  /**
+   * The field is going away. Same as `flush`, except that an open conflict is resolved with
+   * `merge` (both versions kept) instead of holding the user's text, which would be lost.
+   * Without `merge` the conflict stays held, as in `flush`.
+   */
+  leave(merge?: Merge): string | null {
+    if (this.conflict !== null && this.dirty && merge) {
+      this.text = merge(this.conflict, this.text)
+      this.base = this.conflict
+      this.conflict = null
+    }
+    return this.flush()
   }
 
   /** Drop the edit, go back to the stored value. */

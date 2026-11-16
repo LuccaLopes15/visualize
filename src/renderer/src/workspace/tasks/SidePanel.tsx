@@ -7,6 +7,7 @@ import { continueList, type Edit } from '../../lib/mdEditing'
 import { projectColor } from './colors'
 import { IconDown, IconUp } from './icons'
 import { depCandidates, parentOptions, siblingsOf } from './ops'
+import { mergeDrafts } from './draftCore'
 import { useDraft, type Draft } from './useDraft'
 
 export interface PanelActions {
@@ -323,7 +324,8 @@ function DescriptionField({
 }): React.JSX.Element {
   const [preview, setPreview] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
-  const d = useDraft(node.description, onCommit, 900)
+  // Leaving the node with an unresolved conflict keeps both texts (LKA-18).
+  const d = useDraft(node.description, onCommit, 900, mergeDrafts)
   const deferred = useDeferredValue(d.draft)
   const html = useMemo(() => renderMarkdown(deferred), [deferred])
 
