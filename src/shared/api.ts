@@ -44,6 +44,8 @@ export interface VisualizeApi {
   boards: {
     get: Invoke<'boards:get'>
     save: Invoke<'boards:save'>
+    getLibrary: Invoke<'boards:getLibrary'>
+    saveLibrary: Invoke<'boards:saveLibrary'>
   }
   macro: {
     get: Invoke<'macro:get'>

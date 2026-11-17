@@ -6,7 +6,8 @@ import type {
   AppState,
   BinaryFiles,
   ExcalidrawImperativeAPI,
-  ExcalidrawInitialDataState
+  ExcalidrawInitialDataState,
+  LibraryItems
 } from '@excalidraw/excalidraw/types'
 import type { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { SaveStatus } from '../lib/autosave'
@@ -38,6 +39,8 @@ export default function Board({ ideaId, active, onStatus }: BoardProps): React.J
   const lastSig = useRef('')
   const hadBoard = useRef(false)
   const sawFirstChange = useRef(false)
+  /** The saved library was read: only then may Excalidraw's changes overwrite it. */
+  const libraryLoaded = useRef(false)
 
   const autosave = useAutosave<Snapshot>(
     async (snap) => {
@@ -57,9 +60,17 @@ export default function Board({ ideaId, active, onStatus }: BoardProps): React.J
 
   useEffect(() => {
     let alive = true
-    api.boards
-      .get(ideaId)
-      .then((board) => {
+    libraryLoaded.current = false
+    // Biblioteca de formas (global): a failed read must not let an empty library overwrite the saved one.
+    const library = api.boards.getLibrary().then(
+      (items) => {
+        libraryLoaded.current = true
+        return items as LibraryItems
+      },
+      () => [] as LibraryItems
+    )
+    Promise.all([api.boards.get(ideaId), library])
+      .then(([board, libraryItems]) => {
         if (!alive) return
         hadBoard.current = board !== null
         const files = Object.fromEntries((board?.files ?? []).map((f) => [f.id, f]))
@@ -71,6 +82,7 @@ export default function Board({ ideaId, active, onStatus }: BoardProps): React.J
           elements,
           appState,
           files: files as unknown as BinaryFiles,
+          libraryItems,
           scrollToContent: false
         })
       })
@@ -101,6 +113,14 @@ export default function Board({ ideaId, active, onStatus }: BoardProps): React.J
     [] // autosave.schedule only touches the stable Autosaver instance
   )
 
+  const onLibraryChange = useCallback(
+    (items: LibraryItems) => {
+      if (!libraryLoaded.current) return
+      api.boards.saveLibrary([...items]).catch((err: unknown) => onStatus('error', err))
+    },
+    [onStatus]
+  )
+
   if (loadError) return <div className="ws-placeholder">Não foi possível abrir o board: {loadError}</div>
   if (!initial) return <div className="ws-placeholder">Carregando board…</div>
 
@@ -113,6 +133,7 @@ export default function Board({ ideaId, active, onStatus }: BoardProps): React.J
           boardService.attach(ideaId, xapi)
         }}
         onChange={onChange}
+        onLibraryChange={onLibraryChange}
         theme="dark"
         langCode="pt-BR"
         UIOptions={{

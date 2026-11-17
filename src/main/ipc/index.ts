@@ -9,6 +9,7 @@ import type {
 import type { Repositories } from '../db'
 import { notifyChanged } from '../events'
 import { handle, toId } from './handle'
+import { BOARD_LIBRARY_KEY, libraryArg, storedLibrary } from './libraryPayload'
 import { addSpecArg, indexArg, newNodeArg, nodeIdArg, orderedIdsArg, parentIdArg, patchArg, replaceSpecArg } from './planPayload'
 import { hideCaptureWindow, resizeCaptureWindow } from '../windows/captureWindow'
 import { showMainWindow } from '../windows/mainWindow'
@@ -141,6 +142,8 @@ export function registerIpc(deps: IpcDeps): void {
   handle('boards:save', (ideaId, input: BoardSaveInput) =>
     repos.boards.save(toId(ideaId, 'ideia'), input)
   )
+  handle('boards:getLibrary', () => storedLibrary(repos.settings.getRaw(BOARD_LIBRARY_KEY)))
+  handle('boards:saveLibrary', (items) => repos.settings.setRaw(BOARD_LIBRARY_KEY, libraryArg(items)))
   handle('macro:get', (ideaId) => repos.macroPlans.get(toId(ideaId, 'ideia')))
   handle('macro:save', (ideaId, markdown) => repos.macroPlans.save(toId(ideaId, 'ideia'), markdown))
 
