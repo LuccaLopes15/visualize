@@ -19,6 +19,10 @@ import {
   IconX
 } from '../../components/Icons'
 import type { ChatController } from './useChat'
+import { boardIds, hideKnownIds, planIds, type KnownId } from './hideIds'
+import { usePlanGraph } from '../tasks/usePlanGraph'
+import { boardService } from '../boardService'
+import type { ElementLike } from '../board/geometry'
 
 const MIN_W = 300
 const MAX_W = 760
@@ -32,12 +36,14 @@ const SUGGESTIONS = [
 ]
 
 interface Props {
+  ideaId: number
   chat: ChatController
   onCollapse: () => void
   onOpenSettings: () => void
 }
 
-export function ChatPanel({ chat, onCollapse, onOpenSettings }: Props): React.JSX.Element {
+export function ChatPanel({ ideaId, chat, onCollapse, onOpenSettings }: Props): React.JSX.Element {
+  const known = useKnownIds(ideaId, chat)
   const [width, setWidth] = useState(() => {
     const w = Number(readPref('ws.chatWidth'))
     return Number.isFinite(w) && w >= MIN_W ? Math.min(MAX_W, w) : DEFAULT_W
@@ -170,9 +176,9 @@ export function ChatPanel({ chat, onCollapse, onOpenSettings }: Props): React.JS
           </div>
         )}
         {chat.messages.map((m) => (
-          <MessageView key={m.id} message={m} />
+          <MessageView key={m.id} message={m} known={known} />
         ))}
-        {chat.live && <LiveView blocks={chat.live.blocks} />}
+        {chat.live && <LiveView blocks={chat.live.blocks} known={known} />}
       </div>
 
       {chat.error && (
@@ -228,7 +234,24 @@ export function ChatPanel({ chat, onCollapse, onOpenSettings }: Props): React.JS
   )
 }
 
-const MessageView = memo(function MessageView({ message }: { message: ChatMessage }): React.JSX.Element {
+/**
+ * Ids of this idea's task nodes and board elements, so leaked ids in Claude's
+ * answers can be shown as titles. Re-read whenever the chat changes; the array
+ * keeps its identity while the ids/titles are the same (MessageView is memoized).
+ */
+function useKnownIds(ideaId: number, chat: ChatController): KnownId[] {
+  const { graph } = usePlanGraph(ideaId)
+  const last = useRef<{ sig: string; ids: KnownId[] }>({ sig: '', ids: [] })
+  return useMemo(() => {
+    const elements = (boardService.get(ideaId)?.getSceneElements() ?? []) as unknown as ElementLike[]
+    const ids = [...planIds(graph?.nodes ?? []), ...boardIds(elements)]
+    const sig = JSON.stringify(ids)
+    if (sig !== last.current.sig) last.current = { sig, ids }
+    return last.current.ids
+  }, [ideaId, graph, chat.messages, chat.live]) // chat.* only signal "re-read the board"
+}
+
+const MessageView = memo(function MessageView({ message, known }: { message: ChatMessage; known: KnownId[] }): React.JSX.Element {
   if (message.role === 'user') {
     const text = message.blocks.map((b) => (b.type === 'text' ? b.text : '')).join('\n')
     return <div className="chat-msg user">{text}</div>
@@ -236,19 +259,19 @@ const MessageView = memo(function MessageView({ message }: { message: ChatMessag
   const meta = message.meta
   return (
     <div className="chat-msg assistant">
-      <Blocks blocks={message.blocks} />
+      <Blocks blocks={message.blocks} known={known} />
       {meta?.interrupted && <div className="chat-meta">Interrompido</div>}
       {meta?.error && <div className="chat-meta error">{meta.error}</div>}
     </div>
   )
 })
 
-function LiveView({ blocks }: { blocks: ChatBlock[] }): React.JSX.Element {
+function LiveView({ blocks, known }: { blocks: ChatBlock[]; known: KnownId[] }): React.JSX.Element {
   const last = blocks.at(-1)
   const toolRunning = last?.type === 'tool' && last.status === 'running'
   return (
     <div className="chat-msg assistant live">
-      <Blocks blocks={blocks} />
+      <Blocks blocks={blocks} known={known} />
       {!toolRunning && (
         <div className="chat-working" aria-live="polite">
           <span className="chat-dots">
@@ -263,10 +286,12 @@ function LiveView({ blocks }: { blocks: ChatBlock[] }): React.JSX.Element {
   )
 }
 
-function Blocks({ blocks }: { blocks: ChatBlock[] }): React.JSX.Element {
+function Blocks({ blocks, known }: { blocks: ChatBlock[]; known: KnownId[] }): React.JSX.Element {
   return (
     <>
-      {blocks.map((b, i) => (b.type === 'text' ? <Markdown key={i} text={b.text} /> : <ToolChip key={b.id} tool={b} />))}
+      {blocks.map((b, i) =>
+        b.type === 'text' ? <Markdown key={i} text={hideKnownIds(b.text, known)} /> : <ToolChip key={b.id} tool={b} />
+      )}
     </>
   )
 }
