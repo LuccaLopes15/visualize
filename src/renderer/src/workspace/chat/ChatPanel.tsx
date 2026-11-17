@@ -19,6 +19,7 @@ import {
   IconX
 } from '../../components/Icons'
 import type { ChatController } from './useChat'
+import { formatTurnMeta } from './turnMeta'
 
 const MIN_W = 300
 const MAX_W = 760
@@ -234,11 +235,17 @@ const MessageView = memo(function MessageView({ message }: { message: ChatMessag
     return <div className="chat-msg user">{text}</div>
   }
   const meta = message.meta
+  const stats = formatTurnMeta(meta)
   return (
     <div className="chat-msg assistant">
       <Blocks blocks={message.blocks} />
       {meta?.interrupted && <div className="chat-meta">Interrompido</div>}
       {meta?.error && <div className="chat-meta error">{meta.error}</div>}
+      {stats && (
+        <div className="chat-meta" title="Duração e custo deste turno, informados pelo Claude Code">
+          {stats}
+        </div>
+      )}
     </div>
   )
 })
