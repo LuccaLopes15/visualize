@@ -202,7 +202,7 @@ export function Workspace({ idea, projects, onBack, onOpenSettings }: Props): Re
           </section>
         </div>
         {chatOpen ? (
-          <ChatPanel chat={chat} onCollapse={toggleChat} onOpenSettings={() => void openSettings()} />
+          <ChatPanel ideaId={idea.id} chat={chat} onCollapse={toggleChat} onOpenSettings={() => void openSettings()} />
         ) : (
           <ChatRail onToggle={toggleChat} busy={chat.busy} />
         )}

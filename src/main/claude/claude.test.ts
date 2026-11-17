@@ -287,6 +287,13 @@ describe('resolve helpers', () => {
     expect(p).toContain('aba Tarefas')
     expect(p).toContain('Nunca escreva ids de nós')
   })
+
+  it('forbids internal ids (tasks and board) in answers, with an example', () => {
+    const p = buildSystemPrompt({ title: 'T', body: '', projects: [] })
+    expect(p).toContain('tasks_read e board_read')
+    expect(p).toContain('nunca os escreva nas respostas, nem entre parênteses')
+    expect(p).toContain('Certo: "Atualizei a tarefa Criar endpoint de login."')
+  })
 })
 
 // ---- ChatSession with a fake CLI process -------------------------------------------
