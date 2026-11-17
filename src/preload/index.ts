@@ -61,7 +61,9 @@ const api: VisualizeApi = {
   },
   boards: {
     get: (...a) => invoke('boards:get', ...a),
-    save: (...a) => invoke('boards:save', ...a)
+    save: (...a) => invoke('boards:save', ...a),
+    getLibrary: () => invoke('boards:getLibrary'),
+    saveLibrary: (...a) => invoke('boards:saveLibrary', ...a)
   },
   macro: {
     get: (...a) => invoke('macro:get', ...a),

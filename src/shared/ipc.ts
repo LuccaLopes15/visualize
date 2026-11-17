@@ -60,6 +60,9 @@ export interface IpcContract {
   /** Board of an idea, or null if nothing was drawn yet. */
   'boards:get': (ideaId: number) => BoardData | null
   'boards:save': (ideaId: number, input: BoardSaveInput) => SaveResult
+  /** Biblioteca de formas do Excalidraw (global, todas as ideias). Items are Excalidraw LibraryItems. */
+  'boards:getLibrary': () => unknown[]
+  'boards:saveLibrary': (items: unknown[]) => void
 
   'macro:get': (ideaId: number) => MacroPlan
   'macro:save': (ideaId: number, markdown: string) => SaveResult
