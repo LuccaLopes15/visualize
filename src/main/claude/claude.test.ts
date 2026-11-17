@@ -412,6 +412,32 @@ describe('ChatSession', () => {
     expect(spawnArgs[1][spawnArgs[1].indexOf('--resume') + 1]).toBe('s-9')
   })
 
+  it('costs each turn as the delta of the process total, restarting the total after --resume', async () => {
+    const { repos, idea, session, children, spawnArgs } = setup()
+    await session.send('primeira')
+    children[0].emitLine({ type: 'system', subtype: 'init', session_id: 's-1' })
+    children[0].emitLine({ type: 'result', subtype: 'success', duration_ms: 1000, total_cost_usd: 0.02 })
+    await tick()
+    await session.send('segunda')
+    children[0].emitLine({ type: 'result', subtype: 'success', duration_ms: 2000, total_cost_usd: 0.05 })
+    await tick()
+    // New process (e.g. the workspace was closed): the CLI total starts over.
+    session.kill()
+    await tick()
+    await session.send('terceira')
+    expect(spawnArgs[1]).toContain('--resume')
+    children[1].emitLine({ type: 'result', subtype: 'success', duration_ms: 3000, total_cost_usd: 0.01 })
+    await tick()
+    const metas = repos.chat
+      .listMessages(idea.id)
+      .filter((m) => m.role === 'assistant')
+      .map((m) => m.meta)
+    expect(metas.map((m) => m?.durationMs)).toEqual([1000, 2000, 3000])
+    expect(metas[0]?.costUsd).toBeCloseTo(0.02)
+    expect(metas[1]?.costUsd).toBeCloseTo(0.03)
+    expect(metas[2]?.costUsd).toBeCloseTo(0.01)
+  })
+
   it('reports a crash with stderr and an auth failure as not logged in', async () => {
     const { session, events, children } = setup()
     await session.send('oi')
